@@ -1,0 +1,53 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/(jpeg|png|webp|gif|svg\\+xml)');
+    }
+
+    function isLessOrEqualSize(maxSizeMB) {
+      return request.resource.size <= maxSizeMB * 1024 * 1024;
+    }
+
+    // User avatars / Profile media
+    match /users/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isOwner(userId) 
+                   && isImage() 
+                   && isLessOrEqualSize(5);
+    }
+
+    // Vendor product images
+    match /products/{vendorId}/{productId}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if isOwner(vendorId) 
+                            && isImage() 
+                            && isLessOrEqualSize(10);
+      allow delete: if isOwner(vendorId);
+    }
+
+    // KYC Verification documents (Identity docs - private)
+    match /kyc/{userId}/{allPaths=**} {
+      allow read: if isOwner(userId) || (request.auth != null && request.auth.token.admin == true);
+      allow create: if isOwner(userId) 
+                    && isLessOrEqualSize(10)
+                    && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
+    }
+
+    // Default deny for everything else
+    match /{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}

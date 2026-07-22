@@ -1,0 +1,119 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id               String         @id @default(uuid())
+  email            String         @unique
+  password         String
+  name             String
+  phone            String?
+  role             String         @default("BUYER") // BUYER, VENDOR, DRIVER, INVESTOR, ADMIN
+  isEmailVerified  Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  
+  kyc              Kyc?
+  products         Product[]      @relation("VendorProducts")
+  orders           Order[]        @relation("BuyerOrders")
+  escrowWallet     EscrowWallet?  @relation("VendorEscrowWallet")
+  investments      Investment[]   @relation("InvestorInvestments")
+  liveStreams      LiveStream[]   @relation("VendorLiveStreams")
+  sentMessages     Message[]      @relation("SentMessages")
+  receivedMessages Message[]      @relation("ReceivedMessages")
+}
+
+model Kyc {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  documentType    String   // NATIONAL_ID, PASSPORT, DRIVERS_LICENSE, BUSINESS_REGISTRATION
+  documentUrl     String?
+  idNumber        String
+  rejectionReason String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Product {
+  id              String   @id @default(uuid())
+  title           String
+  description     String
+  price           Float    // Retail price in XOF
+  wholesalePrice  Float?   // Wholesale price in XOF
+  wholesaleMinQty Int?     // Minimum quantity for wholesale
+  image           String?
+  category        String
+  stock           Int      @default(0)
+  vendorId        String
+  vendor          User     @relation("VendorProducts", fields: [vendorId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Order {
+  id               String        @id @default(uuid())
+  buyerId          String
+  buyer            User          @relation("BuyerOrders", fields: [buyerId], references: [id], onDelete: Cascade)
+  status           String        @default("PENDING") // PENDING, PAID, ESCROW_HELD, DISPATCHED, DELIVERED, COMPLETED, CANCELLED
+  total            Float
+  currency         String        @default("XOF")
+  paymentMethod    String?       // TMoney, Flooz, Card
+  escrowWalletId   String?
+  escrowWallet     EscrowWallet? @relation(fields: [escrowWalletId], references: [id])
+  driverId         String?
+  driverOtp        String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+}
+
+model EscrowWallet {
+  id             String   @id @default(uuid())
+  vendorId       String   @unique
+  vendor         User     @relation("VendorEscrowWallet", fields: [vendorId], references: [id], onDelete: Cascade)
+  balance        Float    @default(0.0) // Cleared and withdrawable balance in XOF
+  pendingBalance Float    @default(0.0) // Held in escrow balance in XOF
+  currency       String   @default("XOF")
+  orders         Order[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Investment {
+  id         String   @id @default(uuid())
+  investorId String
+  investor   User     @relation("InvestorInvestments", fields: [investorId], references: [id], onDelete: Cascade)
+  amount     Float
+  status     String   @default("ACTIVE") // ACTIVE, COMPLETED
+  roi        Float    // Estimated return rate in %
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model LiveStream {
+  id        String   @id @default(uuid())
+  vendorId  String
+  vendor    User     @relation("VendorLiveStreams", fields: [vendorId], references: [id], onDelete: Cascade)
+  title     String
+  url       String?  // Stream key/URL
+  status    String   @default("LIVE") // LIVE, ENDED
+  viewers   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  senderId   String
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  content    String
+  createdAt  DateTime @default(now())
+}

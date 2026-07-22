@@ -1,0 +1,201 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  /* Register the theme variables with Tailwind v4 theme */
+  --color-emerald-950: var(--emerald-950);
+  --color-emerald-900: var(--emerald-900);
+  --color-emerald-800: var(--emerald-800);
+  --color-emerald-700: var(--emerald-700);
+  --color-emerald-600: var(--emerald-600);
+  --color-emerald-500: var(--emerald-500);
+  --color-emerald-400: var(--emerald-400);
+  --color-emerald-300: var(--emerald-300);
+  --color-emerald-200: var(--emerald-200);
+  --color-emerald-100: var(--emerald-100);
+  --color-emerald-50: var(--emerald-50);
+  --color-white: var(--white-color);
+  --color-yellow-500: var(--yellow-500-color);
+}
+
+:root {
+  /* Dark Mode Default Values */
+  --emerald-950: #022c22;
+  --emerald-900: #064e3b;
+  --emerald-800: #065f46;
+  --emerald-700: #047857;
+  --emerald-600: #059669;
+  --emerald-500: #10b981;
+  --emerald-400: #34d399;
+  --emerald-300: #6ee7b7;
+  --emerald-200: #a7f3d0;
+  --emerald-100: #d1fae5;
+  --emerald-50: #ecfdf5;
+  --white-color: #ffffff;
+  --yellow-500-color: #eab308;
+}
+
+/* Light Mode Overrides */
+:root.light {
+  --emerald-950: #FAFAFA; /* Soft White main background */
+  --emerald-900: #FFFFFF; /* Pure White card & secondary background */
+  --emerald-800: #E5E7EB; /* Light Gray border */
+  --emerald-700: #047857; /* Keep existing brand green */
+  --emerald-600: #059669; /* Brand green medium */
+  --emerald-500: #10b981;
+  --emerald-400: #047857; /* Brand green as main accent/text color */
+  --emerald-300: #4B5563; /* Dark slate text for high contrast */
+  --emerald-200: #1F2937; /* Dark charcoal text for headers and titles */
+  --emerald-100: #111827; /* Dark black text for primary titles */
+  --emerald-50: #FCE7F3;  /* Soft Rose/Pink accent card background */
+  --white-color: #111827; /* Invert text-white to text-gray-900 */
+  --yellow-500-color: #CA8A04; /* High contrast dark gold for readability */
+}
+
+/* Custom visual pulse animation for the Escrow Escort status badge */
+@keyframes goldPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+.pulse-gold {
+  animation: goldPulse 2s infinite ease-in-out;
+}
+
+/* Smooth global transitions for theme changes (300-500ms) */
+.min-h-screen, header, main, div, p, span, button, input, select, textarea, h1, h2, h3, h4, h5, h6, a, svg, table, tr, td, th {
+  transition: background-color 400ms cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 400ms cubic-bezier(0.4, 0, 0.2, 1), 
+              color 400ms cubic-bezier(0.4, 0, 0.2, 1), 
+              text-decoration-color 400ms cubic-bezier(0.4, 0, 0.2, 1),
+              fill 400ms cubic-bezier(0.4, 0, 0.2, 1), 
+              stroke 400ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 400ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Precision selectors for Light Mode */
+.light .bg-emerald-950\/50,
+.light .bg-emerald-950\/80 {
+  background-color: rgba(250, 250, 250, 0.9) !important;
+}
+
+/* Soft shadows for cards in Light Mode */
+.light .bg-emerald-900\/20,
+.light .bg-emerald-900\/30,
+.light .bg-emerald-900\/40,
+.light .bg-emerald-900\/60,
+.light .bg-white\/95 {
+  background-color: #FFFFFF !important;
+  border-color: #E5E7EB !important;
+  color: #1F2937 !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03), 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Hover effects for cards */
+.light .bg-emerald-900\/20:hover,
+.light .bg-emerald-900\/30:hover,
+.light .bg-emerald-900\/40:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.06), 0 4px 6px -2px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Ensure navbar in light mode is solid white with clear shadow */
+.light header {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-bottom-color: #E5E7EB !important;
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Logo brand green & dark text as requested */
+.light header h1 {
+  color: #047857 !important; /* Green logo text */
+}
+
+.light header span.text-yellow-500 {
+  color: #4B5563 !important; /* Darker sub-logo text */
+}
+
+/* Active menu highlighted in green */
+.light .bg-yellow-500 {
+  background-color: #047857 !important; /* Active indicator is brand green */
+  color: #FFFFFF !important;
+}
+
+/* Quick Support section phone and text styling in light mode */
+.light .text-emerald-400 {
+  color: #047857 !important; /* Green instead of pale green */
+}
+
+.light .text-yellow-500 {
+  color: #047857 !important; /* Support contact phone becomes brand green for readability */
+}
+
+/* Buttons styling as requested */
+/* Primary buttons: Green background, White text */
+.light .bg-emerald-600 {
+  background-color: #047857 !important;
+  color: #FFFFFF !important;
+}
+
+.light .bg-emerald-600:hover {
+  background-color: #059669 !important;
+}
+
+/* Secondary buttons: White background, Green border, Green text */
+.light button.border-emerald-500,
+.light button.border-emerald-600,
+.light a.border-emerald-500 {
+  background-color: #FFFFFF !important;
+  border-color: #047857 !important;
+  color: #047857 !important;
+}
+
+.light button.border-emerald-500:hover,
+.light button.border-emerald-600:hover {
+  background-color: #ECFDF5 !important;
+}
+
+/* Form inputs: White background, Light gray borders, Green focus */
+.light input, .light select, .light textarea {
+  background-color: #FFFFFF !important;
+  color: #111827 !important;
+  border-color: #E5E7EB !important;
+}
+
+.light input:focus, .light select:focus, .light textarea:focus {
+  border-color: #047857 !important;
+  box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.15) !important;
+  outline: none !important;
+}
+
+.light input::placeholder, .light textarea::placeholder {
+  color: #9CA3AF !important;
+}
+
+/* Ensure text inside form labels are dark and legible */
+.light label {
+  color: #374151 !important;
+}
+
+/* Modal dialog custom style */
+.light .bg-emerald-950 {
+  background-color: #FAFAFA !important;
+}
+
+/* Scrollbar styling for light mode */
+.light ::-webkit-scrollbar-track {
+  background: #FAFAFA;
+}
+
+.light ::-webkit-scrollbar-thumb {
+  background: #D1D5DB;
+  border-radius: 4px;
+}
+
+.light ::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
+}

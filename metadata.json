@@ -1,0 +1,6 @@
+{
+  "name": "LGF's Mall",
+  "description": "An enterprise-grade multi-vendor marketplace of world-class standards, focused on Togo and Africa first, featuring escrow systems, customer catalog, wholesale, mobile money payments, unified dashboards, and live commerce.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
