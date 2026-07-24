@@ -13,56 +13,21 @@ import fs from "fs";
 const currentFilename = typeof __filename !== "undefined" ? __filename : fileURLToPath(import.meta.url);
 const currentDirname = typeof __dirname !== "undefined" ? __dirname : path.dirname(currentFilename);
 
-// Ensure DATABASE_URL is set to our local SQLite database.
-// In Cloud Run or production, the container filesystem is read-only except for /tmp.
-// To ensure SQLite is fully writable, we copy our seeded database to /tmp/dev.db.
-const sourceDbPath = path.resolve(process.cwd(), "prisma", "dev.db");
-const productionDbDir = path.join("/tmp", "prisma");
-const productionDbPath = path.join(productionDbDir, "dev.db");
+// Configure Cloud SQL PostgreSQL connection URL
+let dbPath = process.env.DATABASE_URL || "";
 
-let dbPath = "file:" + sourceDbPath;
-
-if (process.env.NODE_ENV === "production" || !fs.existsSync(sourceDbPath)) {
-  try {
-    if (!fs.existsSync(productionDbDir)) {
-      fs.mkdirSync(productionDbDir, { recursive: true });
-    }
-    
-    // Copy the seeded database if it doesn't exist in /tmp/prisma/dev.db yet
-    if (!fs.existsSync(productionDbPath)) {
-      if (fs.existsSync(sourceDbPath)) {
-        console.log("Copying pre-seeded SQLite database to writable /tmp/prisma/dev.db...");
-        fs.copyFileSync(sourceDbPath, productionDbPath);
-        console.log("Pre-seeded database copied successfully.");
-      } else {
-        console.log("No pre-seeded source database found. Will initialize empty database in /tmp.");
-      }
-    } else {
-      console.log("Writable SQLite database already exists in /tmp/prisma/dev.db.");
-    }
-    
-    dbPath = "file:" + productionDbPath;
-  } catch (err) {
-    console.error("Failed to setup writable SQLite database in /tmp, falling back to local source path:", err);
-    dbPath = "file:" + sourceDbPath;
+if (process.env.SQL_HOST || (!dbPath || dbPath.startsWith("file:"))) {
+  if (process.env.SQL_HOST) {
+    const sqlUser = process.env.SQL_ADMIN_USER || process.env.SQL_USER || "ai_studio_admin";
+    const sqlPass = encodeURIComponent(process.env.SQL_ADMIN_PASSWORD || process.env.SQL_PASSWORD || "");
+    const sqlDb = process.env.SQL_DB_NAME || "cloud_sql_development_database";
+    dbPath = `postgresql://${sqlUser}:${sqlPass}@localhost/${sqlDb}?host=${process.env.SQL_HOST}`;
   }
 }
 
 process.env.DATABASE_URL = dbPath;
 
-console.log("🔄 Initializing database...");
-console.log(`DATABASE_URL: ${dbPath}\n`);
-
-try {
-  execSync("npx prisma db push --accept-data-loss", {
-    stdio: "inherit",
-    env: { ...process.env, DATABASE_URL: dbPath }
-  });
-  console.log("Prisma schema synchronized successfully\n");
-} catch (dbError) {
-  console.error("Critical: Failed to synchronize Prisma schema:", dbError);
-  throw dbError;
-}
+console.log("🔄 Initializing Cloud SQL PostgreSQL database connection...");
 
 const prisma = new PrismaClient({
   datasources: {
@@ -71,12 +36,13 @@ const prisma = new PrismaClient({
     }
   }
 });
+
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
 
-const JWT_SECRET = process.env.JWT_SECRET || "lgf-mall-secret-key-96979976-togo";
+const JWT_SECRET = process.env.JWT_SECRET || "c9f8a3e7b1d5f2a4e6c802495b1283d7e4f90123456789a0b1c2d3e4f5a6b7c8";
 
 // Native cryptographic token generation for absolute iframe security
 function generateToken(userId: string, role: string) {
@@ -132,13 +98,12 @@ async function authenticateUser(req: any, res: any, next: any) {
 // ----------------------------------------------------
 async function seedDatabase() {
   try {
-    const userCount = await prisma.user.count();
-    if (userCount === 0) {
-      console.log("Empty database detected. Seeding foundational enterprise entities...");
-      
-      // Seed Admin User (using the specified support and dev details)
-      const hashedPassword = bcryptjs.hashSync("LgfMall2026!", 10);
-      const admin = await prisma.user.create({
+    const hashedPassword = bcryptjs.hashSync("LgfMall2026!", 10);
+
+    // 1. Seed Admin User
+    let admin = await prisma.user.findUnique({ where: { email: "arriveramegne@gmail.com" } });
+    if (!admin) {
+      admin = await prisma.user.create({
         data: {
           email: "arriveramegne@gmail.com",
           name: "LGF Admin (Arrive Ramegne)",
@@ -148,148 +113,132 @@ async function seedDatabase() {
         }
       });
       console.log("Admin seeded: arriveramegne@gmail.com");
+    }
 
-      // Seed Vendor 1 (Togolese Wholesale)
-      const vendor1 = await prisma.user.create({
+    // 2. Seed Single Official Boutique Vendor
+    let officialBoutique = await prisma.user.findUnique({ where: { email: "official.store@lgfmall.tg" } });
+    if (!officialBoutique) {
+      officialBoutique = await prisma.user.create({
         data: {
-          email: "lome.textiles@lgfmall.tg",
-          name: "Lomé Pagne Impérial (Ets. Lawson)",
+          email: "official.store@lgfmall.tg",
+          name: "LGF's Mall Official Store",
           password: hashedPassword,
-          phone: "+228 90 12 34 56",
-          role: "VENDOR"
-        }
-      });
-      // Initialize Vendor's Escrow Wallet
-      await prisma.escrowWallet.create({
-        data: {
-          vendorId: vendor1.id,
-          balance: 750000, // 750k FCFA
-          pendingBalance: 250000, // 250k FCFA held in escrow
-          currency: "XOF"
-        }
-      });
-      // Seed Vendor's KYC
-      await prisma.kyc.create({
-        data: {
-          userId: vendor1.id,
-          status: "APPROVED",
-          documentType: "BUSINESS_REGISTRATION",
-          idNumber: "TG-LOM-2026-B-4321",
-          documentUrl: "https://images.unsplash.com/photo-1606857521015-7f9fcf423740?w=600"
-        }
-      });
-      console.log("Vendor seeded: Lomé Pagne Impérial");
-
-      // Seed Vendor 2 (Agricultural Export & Shea Butter)
-      const vendor2 = await prisma.user.create({
-        data: {
-          email: "kloto.nature@lgfmall.tg",
-          name: "Coopérative Kloto Bio-Sarl",
-          password: hashedPassword,
-          phone: "+228 91 87 65 43",
+          phone: "+228 72 99 81 48",
           role: "VENDOR"
         }
       });
       await prisma.escrowWallet.create({
         data: {
-          vendorId: vendor2.id,
-          balance: 120000,
+          vendorId: officialBoutique.id,
+          balance: 1500000,
           pendingBalance: 0,
           currency: "XOF"
         }
       });
       await prisma.kyc.create({
         data: {
-          userId: vendor2.id,
-          status: "PENDING",
-          documentType: "NATIONAL_ID",
-          idNumber: "ID-TG-9876-5432-10",
-          documentUrl: "https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?w=600"
+          userId: officialBoutique.id,
+          status: "APPROVED",
+          documentType: "BUSINESS_REGISTRATION",
+          idNumber: "TG-LOM-2026-OFFICIAL",
+          documentUrl: "https://images.unsplash.com/photo-1606857521015-7f9fcf423740?w=600"
         }
       });
-      console.log("Vendor seeded: Coopérative Kloto Bio");
+      console.log("Single Official Boutique created: LGF's Mall Official Store");
+    } else if (officialBoutique.name !== "LGF's Mall Official Store") {
+      officialBoutique = await prisma.user.update({
+        where: { id: officialBoutique.id },
+        data: { name: "LGF's Mall Official Store" }
+      });
+    }
 
-      // Seed Buyer
-      const buyer = await prisma.user.create({
-        data: {
-          email: "meuferdi@gmail.com",
-          name: "Ferdinand Meugré",
-          password: hashedPassword,
-          phone: "+228 92 11 22 33",
-          role: "BUYER"
+    // Clean up old demo vendors if present
+    await prisma.user.deleteMany({
+      where: {
+        email: { in: ["lome.textiles@lgfmall.tg", "kloto.nature@lgfmall.tg"] }
+      }
+    });
+
+    const existingOfficialProds = await prisma.product.findMany({
+      where: { vendorId: officialBoutique.id }
+    });
+
+    if (existingOfficialProds.length === 0) {
+      // Delete old demo products
+      await prisma.product.deleteMany({});
+
+      const catalogData = [
+        {
+          title: "Rideaux Haute Qualité (La Paire) – Design Élégant",
+          description: "Habillez vos fenêtres avec élégance grâce à nos rideaux de haute qualité. Tissu résistant, finitions soignées et tombé impeccable pour sublimer votre intérieur.",
+          price: 3500,
+          wholesalePrice: 3000,
+          wholesaleMinQty: 6,
+          category: "Maison & Décoration / Rideaux",
+          stock: 100,
+          vendorId: officialBoutique.id,
+          image: "https://i.ibb.co/DjFtx2F/PHOTO-2026-07-20-18-33-43-1.jpg",
+          images: JSON.stringify([
+            "https://i.ibb.co/DjFtx2F/PHOTO-2026-07-20-18-33-43-1.jpg",
+            "https://i.ibb.co/qFBf8Rnw/PHOTO-2026-07-20-18-33-42.jpg"
+          ])
+        },
+        {
+          title: "Rideaux Confort (La Paire) – Excellent Rapport Qualité/Prix",
+          description: "Apportez une touche de fraîcheur et de modernité à vos pièces à petit prix. Des rideaux pratiques, faciles à installer et parfaits pour le quotidien.",
+          price: 6500,
+          wholesalePrice: 6000,
+          wholesaleMinQty: 6,
+          category: "Maison & Décoration / Rideaux",
+          stock: 100,
+          vendorId: officialBoutique.id,
+          image: "https://i.ibb.co/WWKfZ8Lc/PHOTO-2026-07-20-18-33-32-1.jpg",
+          images: JSON.stringify([
+            "https://i.ibb.co/WWKfZ8Lc/PHOTO-2026-07-20-18-33-32-1.jpg",
+            "https://i.ibb.co/mPz6v1H/PHOTO-2026-07-20-18-33-32.jpg",
+            "https://i.ibb.co/v6ZWhh6T/PHOTO-2026-07-20-18-33-31-1.jpg",
+            "https://i.ibb.co/FdPrkw9/PHOTO-2026-07-20-18-33-31.jpg"
+          ])
+        },
+        {
+          title: "Tapis Douillet Premium – Confort et Style",
+          description: "Un tapis ultra-doux et coloré pour réchauffer l'ambiance de votre salon ou de votre chambre. Offre une excellente sensation sous les pieds et retient bien la poussière.",
+          price: 15000,
+          wholesalePrice: 14000,
+          wholesaleMinQty: 2,
+          category: "Maison & Décoration / Tapis",
+          stock: 50,
+          vendorId: officialBoutique.id,
+          image: "https://i.ibb.co/7dxKGgWg/PHOTO-2026-07-20-18-33-51.jpg",
+          images: JSON.stringify([
+            "https://i.ibb.co/7dxKGgWg/PHOTO-2026-07-20-18-33-51.jpg",
+            "https://i.ibb.co/sd06NSgy/PHOTO-2026-07-20-18-33-52-2.jpg",
+            "https://i.ibb.co/pvZnrxVX/PHOTO-2026-07-20-18-33-52-1.jpg",
+            "https://i.ibb.co/fYKVgdDZ/PHOTO-2026-07-20-18-33-52.jpg"
+          ])
+        },
+        {
+          title: "Masque de Visage Hydratant – Éclat et Fraîcheur",
+          description: "Offrez un moment de pure détente à votre peau. Ce masque purifie, hydrate en profondeur et redonne instantanément de l'éclat à votre teint. Idéal pour votre routine beauté.",
+          price: 300,
+          wholesalePrice: 200,
+          wholesaleMinQty: 12,
+          category: "Beauté & Soins / Visage",
+          stock: 500,
+          vendorId: officialBoutique.id,
+          image: "https://i.ibb.co/VcS5WL5b/PHOTO-2026-07-20-18-33-53-2.jpg",
+          images: JSON.stringify([
+            "https://i.ibb.co/VcS5WL5b/PHOTO-2026-07-20-18-33-53-2.jpg",
+            "https://i.ibb.co/JRCyHBz1/PHOTO-2026-07-20-18-33-53-1.jpg",
+            "https://i.ibb.co/fdz8HbWX/PHOTO-2026-07-20-18-33-53.jpg"
+          ])
         }
-      });
-      console.log("Buyer seeded: Ferdinand Meugré");
+      ];
 
-      // Seed Products for Vendor 1 (Textiles)
-      await prisma.product.createMany({
-        data: [
-          {
-            title: "Pagne Wax Hollandais Authentique - Super-Wax",
-            description: "Pagne de qualité supérieure importé, 100% coton, motifs royaux africains. Lot de 6 yards. Parfait pour les grands événements à Lomé.",
-            price: 65000,
-            wholesalePrice: 55000,
-            wholesaleMinQty: 5,
-            category: "Mode & Textiles",
-            stock: 120,
-            vendorId: vendor1.id,
-            image: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800"
-          },
-          {
-            title: "Tissu Kente Traditionnel Tissé Main",
-            description: "Fil à fil artisanal authentique d'Afrique de l'Ouest. Épaisseur premium, couleurs éclatantes or, rouge et émeraude.",
-            price: 120000,
-            wholesalePrice: 95000,
-            wholesaleMinQty: 3,
-            category: "Mode & Textiles",
-            stock: 30,
-            vendorId: vendor1.id,
-            image: "https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?w=800"
-          }
-        ]
-      });
-
-      // Seed Products for Vendor 2 (Agriculture & Cosmetics)
-      await prisma.product.createMany({
-        data: [
-          {
-            title: "Beurre de Karité Bio Non Raffiné du Togo",
-            description: "Beurre de karité 100% naturel, extrait à froid par la coopérative de Kpalimé. Propriétés hydratantes exceptionnelles pour la peau et les cheveux.",
-            price: 4500,
-            wholesalePrice: 3200,
-            wholesaleMinQty: 10,
-            category: "Cosmétiques & Beauté",
-            stock: 500,
-            vendorId: vendor2.id,
-            image: "https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=800"
-          },
-          {
-            title: "Cacao Brut en Fèves de Kpalimé",
-            description: "Fèves de cacao séchées au soleil, issues de l'agriculture biologique équitable du Kloto. Arôme riche et puissant.",
-            price: 8500,
-            wholesalePrice: 6500,
-            wholesaleMinQty: 20,
-            category: "Alimentation & Épicerie",
-            stock: 1000,
-            vendorId: vendor2.id,
-            image: "https://images.unsplash.com/photo-1587132137056-bfbf0166836e?w=800"
-          }
-        ]
-      });
-
-      // Seed a few initial investments (Investor track)
-      await prisma.investment.create({
-        data: {
-          investorId: admin.id, // Using Admin as a general actor for display
-          amount: 5000000, // 5M FCFA investment in Kloto agricultural supply
-          roi: 12.5,
-          status: "ACTIVE"
-        }
-      });
-
-      console.log("✅ Seed complete! All system entities successfully created in dev.db.");
-    } else {
-      console.log("Database already initialized. Skipping seeding.");
+      for (const item of catalogData) {
+        await prisma.product.create({ data: item });
+      }
+      console.log("✅ Seed complete! 4 official catalog products published under LGF's Mall Official Store.");
     }
   } catch (err) {
     console.error("Error running auto-seed routine:", err);
@@ -482,16 +431,63 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 // Firebase OAuth/Google Sign-In Sync Route
+let firebaseAdminApp: any = null;
+try {
+  const admin: any = require("firebase-admin");
+  if (!admin.apps || !admin.apps.length) {
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+      firebaseAdminApp = admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+    } else {
+      firebaseAdminApp = admin.initializeApp({
+        projectId: process.env.VITE_FIREBASE_PROJECT_ID || "lgf-mall-togo"
+      });
+    }
+  } else {
+    firebaseAdminApp = admin.apps[0];
+  }
+} catch (e) {
+  console.warn("Firebase Admin SDK init notice:", (e as any)?.message || e);
+}
+
 app.post("/api/auth/firebase-sync", async (req, res) => {
-  const { email, name, uid, role, phone } = req.body;
+  const { email, name, uid, role, phone, idToken } = req.body;
 
   if (!email) {
     return res.status(400).json({ error: "L'adresse email est requise pour la synchronisation Google Sign-In." });
   }
 
+  if (!idToken) {
+    return res.status(401).json({ error: "Authentification Google non sécurisée. Un ID Token valide vérifié par le serveur est requis." });
+  }
+
+  // Server-side Google ID Token Security Check
+  let verifiedEmail = email;
+  let isTokenVerified = false;
+
+  if (firebaseAdminApp) {
+    try {
+      const admin: any = require("firebase-admin");
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      if (decodedToken && decodedToken.email) {
+        verifiedEmail = decodedToken.email;
+        isTokenVerified = true;
+      }
+    } catch (tokenErr) {
+      console.warn("⚠️ Firebase Admin ID token verification failed:", (tokenErr as any)?.message || tokenErr);
+      return res.status(401).json({ error: "Jeton Google (ID Token) invalide ou expiré. Authentification refusée par le serveur." });
+    }
+  }
+
+  if (!isTokenVerified) {
+    return res.status(401).json({ error: "Authentification Google non sécurisée. Impossible de vérifier l'ID Token avec Firebase Admin." });
+  }
+
   try {
     let user = await prisma.user.findUnique({
-      where: { email },
+      where: { email: verifiedEmail },
       include: { kyc: true, escrowWallet: true }
     });
 
@@ -736,11 +732,16 @@ app.post("/api/products", authenticateUser, async (req: any, res) => {
     return res.status(403).json({ error: "Accès refusé. Réservé aux vendeurs." });
   }
 
-  const { title, description, price, wholesalePrice, wholesaleMinQty, image, category, stock } = req.body;
+  const { title, description, price, wholesalePrice, wholesaleMinQty, image, images, category, stock } = req.body;
 
   if (!title || !description || price === undefined || !category) {
     return res.status(400).json({ error: "Veuillez renseigner le titre, la description, le prix et la catégorie." });
   }
+
+  const imagesJson = Array.isArray(images) && images.length > 0 
+    ? JSON.stringify(images) 
+    : (image ? JSON.stringify([image]) : null);
+  const mainImage = (Array.isArray(images) && images.length > 0) ? images[0] : (image || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800");
 
   try {
     const product = await prisma.product.create({
@@ -750,7 +751,8 @@ app.post("/api/products", authenticateUser, async (req: any, res) => {
         price: parseFloat(price),
         wholesalePrice: wholesalePrice ? parseFloat(wholesalePrice) : null,
         wholesaleMinQty: wholesaleMinQty ? parseInt(wholesaleMinQty) : null,
-        image: image || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800",
+        image: mainImage,
+        images: imagesJson,
         category,
         stock: stock !== undefined ? parseInt(stock) : 10,
         vendorId: req.user.id
@@ -774,7 +776,7 @@ app.put("/api/products/:id", authenticateUser, async (req: any, res) => {
   }
 
   const { id } = req.params;
-  const { title, description, price, wholesalePrice, wholesaleMinQty, image, category, stock } = req.body;
+  const { title, description, price, wholesalePrice, wholesaleMinQty, image, images, category, stock } = req.body;
 
   try {
     const existing = await prisma.product.findUnique({ where: { id } });
@@ -786,6 +788,13 @@ app.put("/api/products/:id", authenticateUser, async (req: any, res) => {
       return res.status(403).json({ error: "Vous n'êtes pas propriétaire de cet article." });
     }
 
+    const imagesJson = Array.isArray(images) 
+      ? JSON.stringify(images) 
+      : (image ? JSON.stringify([image]) : existing.images);
+    const mainImage = (Array.isArray(images) && images.length > 0) 
+      ? images[0] 
+      : (image !== undefined ? image : existing.image);
+
     const updated = await prisma.product.update({
       where: { id },
       data: {
@@ -794,7 +803,8 @@ app.put("/api/products/:id", authenticateUser, async (req: any, res) => {
         price: price !== undefined ? parseFloat(price) : existing.price,
         wholesalePrice: wholesalePrice !== undefined ? (wholesalePrice ? parseFloat(wholesalePrice) : null) : existing.wholesalePrice,
         wholesaleMinQty: wholesaleMinQty !== undefined ? (wholesaleMinQty ? parseInt(wholesaleMinQty) : null) : existing.wholesaleMinQty,
-        image: image !== undefined ? image : existing.image,
+        image: mainImage,
+        images: imagesJson,
         category: category || existing.category,
         stock: stock !== undefined ? parseInt(stock) : existing.stock
       }
@@ -861,52 +871,68 @@ app.post("/api/orders", authenticateUser, async (req: any, res) => {
       return res.status(400).json({ error: `Stock insuffisant. Seulement ${product.stock} unités disponibles.` });
     }
 
-    // Determine pricing (wholesale tier vs retail price)
-    let unitPrice = product.price;
-    if (product.wholesalePrice && product.wholesaleMinQty && quantity >= product.wholesaleMinQty) {
-      unitPrice = product.wholesalePrice;
-    }
+    // Wrap order creation, stock decrement, and escrow wallet update in an atomic Prisma transaction
+    const order = await prisma.$transaction(async (tx) => {
+      // Re-fetch product inside transaction to ensure fresh stock reading
+      const txProduct = await tx.product.findUnique({
+        where: { id: productId }
+      });
 
-    const total = unitPrice * quantity;
+      if (!txProduct) {
+        throw new Error("ARTICLE_NOT_FOUND");
+      }
 
-    // Retrieve or create Escrow Wallet for Vendor
-    let wallet = await prisma.escrowWallet.findUnique({
-      where: { vendorId: product.vendorId }
-    });
+      if (txProduct.stock < quantity) {
+        throw new Error(`INSUFFICIENT_STOCK:${txProduct.stock}`);
+      }
 
-    if (!wallet) {
-      wallet = await prisma.escrowWallet.create({
+      // Determine pricing
+      let unitPrice = txProduct.price;
+      if (txProduct.wholesalePrice && txProduct.wholesaleMinQty && quantity >= txProduct.wholesaleMinQty) {
+        unitPrice = txProduct.wholesalePrice;
+      }
+      const total = unitPrice * quantity;
+
+      // Find or create wallet
+      let wallet = await tx.escrowWallet.findUnique({
+        where: { vendorId: txProduct.vendorId }
+      });
+
+      if (!wallet) {
+        wallet = await tx.escrowWallet.create({
+          data: {
+            vendorId: txProduct.vendorId,
+            balance: 0.0,
+            pendingBalance: 0.0,
+            currency: "XOF"
+          }
+        });
+      }
+
+      // 1. Create order
+      const newOrder = await tx.order.create({
         data: {
-          vendorId: product.vendorId,
-          balance: 0.0,
-          pendingBalance: 0.0,
-          currency: "XOF"
+          buyerId: req.user.id,
+          total,
+          status: "ESCROW_HELD",
+          paymentMethod: paymentMethod || "TMoney",
+          escrowWalletId: wallet.id
         }
       });
-    }
 
-    // Create the Order
-    // In our model, we link order to escrowWallet and set status to "ESCROW_HELD" to signal safe custody
-    const order = await prisma.order.create({
-      data: {
-        buyerId: req.user.id,
-        total,
-        status: "ESCROW_HELD", // Immediately secured in Escrow pending delivery confirmation
-        paymentMethod: paymentMethod || "TMoney",
-        escrowWalletId: wallet.id
-      }
-    });
+      // 2. Decrement stock atomically
+      await tx.product.update({
+        where: { id: productId },
+        data: { stock: txProduct.stock - quantity }
+      });
 
-    // Update Product Stock
-    await prisma.product.update({
-      where: { id: productId },
-      data: { stock: product.stock - quantity }
-    });
+      // 3. Increment pending escrow balance
+      await tx.escrowWallet.update({
+        where: { id: wallet.id },
+        data: { pendingBalance: wallet.pendingBalance + total }
+      });
 
-    // Increment held-in-escrow pending balance for the vendor
-    await prisma.escrowWallet.update({
-      where: { id: wallet.id },
-      data: { pendingBalance: wallet.pendingBalance + total }
+      return newOrder;
     });
 
     res.status(201).json({
@@ -973,55 +999,68 @@ app.post("/api/orders/:id/confirm-delivery", authenticateUser, async (req: any, 
   const { id } = req.params;
 
   try {
-    const order = await prisma.order.findUnique({
-      where: { id },
-      include: { escrowWallet: true }
-    });
-
-    if (!order) {
-      return res.status(404).json({ error: "Transaction introuvable." });
-    }
-
-    if (order.status === "COMPLETED") {
-      return res.status(400).json({ error: "Cette transaction est déjà finalisée et les fonds ont déjà été libérés." });
-    }
-
-    // Verify permissions: Only Buyer who placed it, or Vendor, or LGF Admin can release the escrow funds
-    const canConfirm = 
-      order.buyerId === req.user.id || 
-      (order.escrowWallet && order.escrowWallet.vendorId === req.user.id) || 
-      req.user.role === "ADMIN";
-
-    if (!canConfirm) {
-      return res.status(403).json({ error: "Vous n'êtes pas autorisé à valider la livraison pour cette transaction." });
-    }
-
-    // Update Order Status
-    const updatedOrder = await prisma.order.update({
-      where: { id },
-      data: { status: "COMPLETED" }
-    });
-
-    // Release funds in EscrowWallet: Move from pendingBalance to balance
-    if (order.escrowWallet) {
-      const pendingRelease = order.total;
-      const newPending = Math.max(0, order.escrowWallet.pendingBalance - pendingRelease);
-      const newBalance = order.escrowWallet.balance + pendingRelease;
-
-      await prisma.escrowWallet.update({
-        where: { id: order.escrowWallet.id },
-        data: {
-          pendingBalance: newPending,
-          balance: newBalance
-        }
+    const { updatedOrder } = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id },
+        include: { escrowWallet: true }
       });
-    }
+
+      if (!order) {
+        throw new Error("ORDER_NOT_FOUND");
+      }
+
+      if (order.status === "COMPLETED") {
+        throw new Error("ALREADY_COMPLETED");
+      }
+
+      // Verify permissions: Only Buyer who placed it, or Vendor, or LGF Admin can release the escrow funds
+      const canConfirm = 
+        order.buyerId === req.user.id || 
+        (order.escrowWallet && order.escrowWallet.vendorId === req.user.id) || 
+        req.user.role === "ADMIN";
+
+      if (!canConfirm) {
+        throw new Error("FORBIDDEN");
+      }
+
+      // Update Order Status
+      const uOrder = await tx.order.update({
+        where: { id },
+        data: { status: "COMPLETED" }
+      });
+
+      // Release funds in EscrowWallet: Move from pendingBalance to balance
+      if (order.escrowWallet) {
+        const pendingRelease = order.total;
+        const newPending = Math.max(0, order.escrowWallet.pendingBalance - pendingRelease);
+        const newBalance = order.escrowWallet.balance + pendingRelease;
+
+        await tx.escrowWallet.update({
+          where: { id: order.escrowWallet.id },
+          data: {
+            pendingBalance: newPending,
+            balance: newBalance
+          }
+        });
+      }
+
+      return { updatedOrder: uOrder };
+    });
 
     res.json({
       message: "Livraison confirmée ! Les fonds du séquestre ont été libérés et versés au solde du vendeur.",
       order: updatedOrder
     });
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.message === "ALREADY_COMPLETED") {
+      return res.status(400).json({ error: "Cette transaction est déjà finalisée et les fonds ont déjà été libérés." });
+    }
+    if (err?.message === "FORBIDDEN") {
+      return res.status(403).json({ error: "Vous n'êtes pas autorisé à valider la livraison pour cette transaction." });
+    }
+    if (err?.message === "ORDER_NOT_FOUND") {
+      return res.status(404).json({ error: "Transaction introuvable." });
+    }
     console.error("Confirm delivery error:", err);
     res.status(500).json({ error: "Impossible de valider la livraison." });
   }
@@ -1040,27 +1079,33 @@ app.post("/api/escrow/withdraw", authenticateUser, async (req: any, res) => {
   }
 
   try {
-    const wallet = await prisma.escrowWallet.findUnique({
-      where: { vendorId: req.user.id }
-    });
+    const { withdrawnAmount, updatedWallet } = await prisma.$transaction(async (tx) => {
+      const wallet = await tx.escrowWallet.findUnique({
+        where: { vendorId: req.user.id }
+      });
 
-    if (!wallet || wallet.balance <= 0) {
-      return res.status(400).json({ error: "Votre solde disponible et retirable est insuffisant (0 FCFA)." });
-    }
+      if (!wallet || wallet.balance <= 0) {
+        throw new Error("INSUFFICIENT_FUNDS");
+      }
 
-    const withdrawnAmount = wallet.balance;
+      const amountToWithdraw = wallet.balance;
 
-    // Reset withdrawable balance to 0
-    const updatedWallet = await prisma.escrowWallet.update({
-      where: { id: wallet.id },
-      data: { balance: 0.0 }
+      const uWallet = await tx.escrowWallet.update({
+        where: { id: wallet.id },
+        data: { balance: 0.0 }
+      });
+
+      return { withdrawnAmount: amountToWithdraw, updatedWallet: uWallet };
     });
 
     res.json({
       message: `Retrait initié de ${withdrawnAmount} FCFA vers votre compte ${method} (${accountNumber}). Traitement en cours par notre banque partenaire.`,
       wallet: updatedWallet
     });
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.message === "INSUFFICIENT_FUNDS") {
+      return res.status(400).json({ error: "Votre solde disponible et retirable est insuffisant (0 FCFA)." });
+    }
     res.status(500).json({ error: "Erreur lors de l'initiation du retrait." });
   }
 });

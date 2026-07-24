@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ShoppingBag, Plus, Clock, Search, CheckCircle2, Lock, AlertCircle, Heart } from "lucide-react";
 import { Product, Order } from "../types";
 import ProductCard from "./ProductCard";
@@ -6,6 +6,10 @@ import tmoneyQrImage from "../assets/images/tmoney_merchant_qr_1784541339901.jpg
 import { useAppStore } from "../store";
 import ProductDetailModal from "./ProductDetailModal";
 import CartDrawer from "./CartDrawer";
+import FacetedSearchPanel, { FacetedFilterState } from "./FacetedSearchPanel";
+import EcobankPaymentCard from "./EcobankPaymentCard";
+import WishlistSection from "./WishlistSection";
+import { motion, AnimatePresence } from "motion/react";
 
 interface BuyerPortalProps {
   products: Product[];
@@ -17,7 +21,7 @@ interface BuyerPortalProps {
   isLoading: boolean;
   initialProductId?: string;
   initialQuantity?: number;
-  initialTab?: "catalog" | "order" | "history";
+  initialTab?: "catalog" | "favorites" | "order" | "history";
 }
 
 export default function BuyerPortal({
@@ -46,9 +50,100 @@ export default function BuyerPortal({
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const [isPlacingCartOrders, setIsPlacingCartOrders] = useState(false);
 
-  const [buyerTab, setBuyerTab] = useState<"catalog" | "order" | "history">(initialTab || "catalog");
-  const [catalogSearch, setCatalogSearch] = useState("");
-  const [catalogCategory, setCatalogCategory] = useState("Tous");
+  const [buyerTab, setBuyerTab] = useState<"catalog" | "favorites" | "order" | "history">(initialTab || "catalog");
+
+  // Max catalog price for range calculation
+  const maxCatalogPrice = Math.max(...products.map((p) => p.price || 0), 500000);
+
+  // Faceted Search State initialized from URL query parameters
+  const [facetedFilters, setFacetedFilters] = useState<FacetedFilterState>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return {
+      search: params.get("search") || params.get("q") || "",
+      category: params.get("category") || params.get("cat") || "Tous",
+      vendor: params.get("vendor") || "all",
+      region: params.get("region") || "Toutes Régions",
+      minPrice: parseInt(params.get("minPrice") || "0", 10),
+      maxPrice: parseInt(params.get("maxPrice") || "500000", 10),
+      availability: (params.get("avail") as any) || "all",
+      minRating: parseInt(params.get("rating") || "0", 10),
+      sortBy: (params.get("sort") as any) || "featured"
+    };
+  });
+
+  // Extract unique vendor names
+  const availableVendors = Array.from(
+    new Set(products.map((p) => p.vendor?.name || "Boutique d'Assigamé").filter(Boolean))
+  );
+
+  // Sync state changes back to URL query parameters
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (facetedFilters.search) params.set("search", facetedFilters.search);
+    if (facetedFilters.category !== "Tous") params.set("category", facetedFilters.category);
+    if (facetedFilters.vendor !== "all") params.set("vendor", facetedFilters.vendor);
+    if (facetedFilters.region !== "Toutes Régions") params.set("region", facetedFilters.region);
+    if (facetedFilters.minPrice > 0) params.set("minPrice", facetedFilters.minPrice.toString());
+    if (facetedFilters.maxPrice < 500000) params.set("maxPrice", facetedFilters.maxPrice.toString());
+    if (facetedFilters.availability !== "all") params.set("avail", facetedFilters.availability);
+    if (facetedFilters.sortBy !== "featured") params.set("sort", facetedFilters.sortBy);
+
+    const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+    window.history.replaceState(null, "", newUrl);
+  }, [facetedFilters]);
+
+  // Filter & Sort Products dynamically
+  const filteredProducts = products
+    .filter((p) => {
+      const query = facetedFilters.search.toLowerCase();
+      const matchesSearch =
+        !query ||
+        p.title.toLowerCase().includes(query) ||
+        p.description.toLowerCase().includes(query) ||
+        p.category.toLowerCase().includes(query);
+
+      const matchesCategory =
+        facetedFilters.category === "Tous" || p.category === facetedFilters.category;
+
+      const vendorName = p.vendor?.name || "Boutique d'Assigamé";
+      const matchesVendor =
+        facetedFilters.vendor === "all" || vendorName === facetedFilters.vendor;
+
+      const matchesPrice =
+        p.price >= facetedFilters.minPrice && p.price <= facetedFilters.maxPrice;
+
+      const matchesAvail =
+        facetedFilters.availability === "all"
+          ? true
+          : facetedFilters.availability === "in_stock"
+          ? p.stock > 0
+          : facetedFilters.availability === "wholesale"
+          ? !!(p.wholesalePrice && p.wholesaleMinQty)
+          : true;
+
+      return matchesSearch && matchesCategory && matchesVendor && matchesPrice && matchesAvail;
+    })
+    .sort((a, b) => {
+      if (facetedFilters.sortBy === "newest") return b.id.localeCompare(a.id);
+      if (facetedFilters.sortBy === "price_asc") return a.price - b.price;
+      if (facetedFilters.sortBy === "price_desc") return b.price - a.price;
+      if (facetedFilters.sortBy === "bestseller") return (b.stock || 0) - (a.stock || 0);
+      return 0;
+    });
+
+  const handleResetFilters = () => {
+    setFacetedFilters({
+      search: "",
+      category: "Tous",
+      vendor: "all",
+      region: "Toutes Régions",
+      minPrice: 0,
+      maxPrice: 500000,
+      availability: "all",
+      minRating: 0,
+      sortBy: "featured"
+    });
+  };
 
   const [orderProductId, setOrderProductId] = useState(initialProductId || "");
   const [orderQty, setOrderQty] = useState(initialQuantity || 1);
@@ -142,6 +237,23 @@ export default function BuyerPortal({
           <span>Catalogue des Articles</span>
         </button>
         <button
+          id="tab-favorites"
+          onClick={() => setBuyerTab("favorites")}
+          className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-2 relative ${
+            buyerTab === "favorites"
+              ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/10"
+              : "text-emerald-700 hover:bg-emerald-50"
+          }`}
+        >
+          <Heart className={`w-4 h-4 ${wishlist.length > 0 ? "fill-rose-500 text-rose-500" : ""}`} />
+          <span>Mes Favoris ({wishlist.length})</span>
+          {wishlist.length > 0 && (
+            <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+              {wishlist.length}
+            </span>
+          )}
+        </button>
+        <button
           id="tab-order"
           onClick={() => setBuyerTab("order")}
           className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-2 ${
@@ -170,77 +282,90 @@ export default function BuyerPortal({
       {/* Catalog view */}
       {buyerTab === "catalog" && (
         <div id="catalog-section" className="space-y-6">
-          {/* Search & filters */}
-          <div className="bg-white p-6 rounded-3xl border border-emerald-100/50 shadow-md space-y-4">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-emerald-400" />
-                <input
-                  type="text"
-                  placeholder="Rechercher un article (ex: textiles, pagne)..."
-                  value={catalogSearch}
-                  onChange={(e) => setCatalogSearch(e.target.value)}
-                  className="w-full bg-emerald-50 border border-emerald-100 pl-10 pr-4 py-3 rounded-xl text-xs text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
-                />
-              </div>
-              <div className="flex gap-2">
-                <select
-                  value={catalogCategory}
-                  onChange={(e) => setCatalogCategory(e.target.value)}
-                  className="bg-emerald-50 border border-emerald-100 px-4 py-3 rounded-xl text-xs text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium cursor-pointer flex-1 sm:flex-initial"
-                >
-                  <option value="Tous">Toutes Catégories</option>
-                  <option value="Mode & Textiles">Mode & Textiles</option>
-                  <option value="Cosmétiques & Beauté">Cosmétiques & Beauté</option>
-                  <option value="Alimentation">Alimentation</option>
-                  <option value="Électronique">Électronique</option>
-                </select>
-                <button
-                  id="buyer-cart-trigger"
-                  type="button"
-                  onClick={() => setIsCartDrawerOpen(true)}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-2 shadow-md shadow-emerald-600/10 cursor-pointer"
-                >
-                  <ShoppingBag className="w-4 h-4" />
-                  <span className="hidden xs:inline">Mon Panier</span>
-                  <span className="bg-emerald-800 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
-                    {cart.reduce((sum, item) => sum + item.quantity, 0)}
-                  </span>
-                </button>
-              </div>
-            </div>
+          {/* Faceted Search Panel */}
+          <FacetedSearchPanel
+            filters={facetedFilters}
+            onFilterChange={(newF) => setFacetedFilters((prev) => ({ ...prev, ...newF }))}
+            onResetFilters={handleResetFilters}
+            availableVendors={availableVendors}
+            totalResultsCount={filteredProducts.length}
+            maxCatalogPrice={maxCatalogPrice}
+            formatCurrency={formatCurrency}
+          />
+
+          {/* Cart Header Drawer Action */}
+          <div className="flex justify-end">
+            <button
+              id="buyer-cart-trigger"
+              type="button"
+              onClick={() => setIsCartDrawerOpen(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center space-x-2 shadow-md shadow-emerald-600/10 cursor-pointer"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span>Voir mon Panier</span>
+              <span className="bg-emerald-800 text-white text-[10px] px-2 py-0.5 rounded-full font-bold font-mono">
+                {cart.reduce((sum, item) => sum + item.quantity, 0)}
+              </span>
+            </button>
           </div>
 
-          {/* Products Grid */}
-          {products.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-3xl border border-emerald-100/50">
-              <ShoppingBag className="w-12 h-12 text-emerald-300 mx-auto mb-3" />
-              <p className="text-sm font-semibold text-emerald-600">Aucun produit disponible pour le moment.</p>
-            </div>
+          {/* Products Grid with 4 columns on ultra-wide screens (≥1600px / 2xl) and Framer Motion transitions */}
+          {filteredProducts.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center py-16 bg-white rounded-3xl border border-emerald-100/50 shadow-sm space-y-3"
+            >
+              <ShoppingBag className="w-12 h-12 text-emerald-300 mx-auto" />
+              <p className="text-sm font-bold text-emerald-950">Aucun produit ne correspond à ces critères de recherche.</p>
+              <button
+                onClick={handleResetFilters}
+                className="text-xs font-bold text-emerald-600 hover:underline cursor-pointer"
+              >
+                Réinitialiser les filtres pour tout voir
+              </button>
+            </motion.div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {products
-                .filter((p) => {
-                  const matchesSearch = p.title.toLowerCase().includes(catalogSearch.toLowerCase()) || p.description.toLowerCase().includes(catalogSearch.toLowerCase());
-                  const matchesCategory = catalogCategory === "Tous" || p.category === catalogCategory;
-                  return matchesSearch && matchesCategory;
-                })
-                .map((p) => (
-                  <ProductCard
+            <motion.div
+              layout
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 min-[1600px]:grid-cols-4 gap-6"
+            >
+              <AnimatePresence mode="popLayout">
+                {filteredProducts.map((p) => (
+                  <motion.div
                     key={p.id}
-                    product={p}
-                    formatCurrency={formatCurrency}
-                    onBuy={(productId, qty) => {
-                      setOrderProductId(productId);
-                      setOrderQty(qty);
-                      setBuyerTab("order");
-                    }}
-                    onOpenDetail={(product) => setSelectedModalProduct(product)}
-                  />
+                    layout
+                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                    transition={{ duration: 0.25 }}
+                  >
+                    <ProductCard
+                      product={p}
+                      formatCurrency={formatCurrency}
+                      onBuy={(productId, qty) => {
+                        setOrderProductId(productId);
+                        setOrderQty(qty);
+                        setBuyerTab("order");
+                      }}
+                      onOpenDetail={(product) => setSelectedModalProduct(product)}
+                    />
+                  </motion.div>
                 ))}
-            </div>
+              </AnimatePresence>
+            </motion.div>
           )}
         </div>
+      )}
+
+      {/* Favorites Wishlist Section */}
+      {buyerTab === "favorites" && (
+        <WishlistSection
+          products={products}
+          formatCurrency={formatCurrency}
+          onOpenDetail={(product) => setSelectedModalProduct(product)}
+          onGoToCatalog={() => setBuyerTab("catalog")}
+        />
       )}
 
       {/* Order placement Form */}
@@ -312,32 +437,25 @@ export default function BuyerPortal({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-emerald-700 block">Moyen de Paiement :</label>
+                    <label className="text-[10px] font-bold text-emerald-700 block font-mono uppercase">Moyen de Consignation :</label>
                     <select
                       value={orderPaymentMethod}
                       onChange={(e) => {
-                        const val = e.target.value;
-                        if (val !== "TMoney") {
-                          setPaymentWarning("Ce moyen de paiement sera disponible très prochainement. Veuillez utiliser TMoney (Numéro Marchand : 1355124) pour finaliser votre commande.");
-                          setOrderPaymentMethod("TMoney");
-                        } else {
-                          setPaymentWarning(null);
-                          setOrderPaymentMethod(val);
-                        }
+                        setOrderPaymentMethod(e.target.value);
+                        setPaymentWarning(null);
                       }}
-                      className="w-full bg-white border border-emerald-100 px-3 py-2 rounded-xl text-xs text-emerald-950 focus:outline-none cursor-pointer"
+                      className="w-full bg-white border border-emerald-100 px-3 py-2 rounded-xl text-xs text-emerald-950 font-bold focus:outline-none cursor-pointer"
                     >
                       <option value="TMoney">TMoney (Togo)</option>
                       <option value="Flooz">Moov Flooz (Togo)</option>
-                      <option value="Card">Carte Visa/Mastercard (Africa)</option>
+                      <option value="Ecobank">Ecobank PI-UEMOA QR / Carte Bancaire</option>
                     </select>
                   </div>
                 </div>
 
-                {paymentWarning && (
-                  <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 text-[11px] rounded-xl flex items-start space-x-2 leading-relaxed">
-                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                    <span>{paymentWarning}</span>
+                {(orderPaymentMethod === "Ecobank" || orderPaymentMethod === "Card") && (
+                  <div className="pt-2">
+                    <EcobankPaymentCard amount={totalPrice} formatCurrency={formatCurrency} />
                   </div>
                 )}
 
@@ -488,7 +606,7 @@ export default function BuyerPortal({
               </div>
               <div className="flex justify-between border-b border-emerald-100/50 pb-1.5">
                 <span className="text-emerald-700">Moyen de Paiement :</span>
-                <span className="font-bold text-emerald-950">TMoney (Togo)</span>
+                <span className="font-bold text-emerald-950">{orderPaymentMethod === "Ecobank" ? "Ecobank PI-UEMOA QR / Carte" : `${orderPaymentMethod} (Togo)`}</span>
               </div>
               <div className="flex justify-between pt-1 font-semibold text-emerald-900">
                 <span>Montant à bloquer :</span>
@@ -496,36 +614,40 @@ export default function BuyerPortal({
               </div>
             </div>
 
-            {/* TMoney Merchant Section with QR Code and USSD Instruction */}
-            <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-4 space-y-4 text-center">
-              <div className="space-y-1">
-                <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider font-mono block">Instructions de Paiement TMoney</span>
-                <p className="text-[11px] text-emerald-950 font-semibold leading-normal">
-                  Veuillez scanner le code ci-dessous depuis votre application TMoney ou composer le code USSD ci-dessous.
-                </p>
-              </div>
+            {/* Ecobank Payment Card or TMoney Merchant Section */}
+            {orderPaymentMethod === "Ecobank" || orderPaymentMethod === "Card" ? (
+              <EcobankPaymentCard amount={totalPrice} formatCurrency={formatCurrency} onSuccess={handleConfirmPayment} />
+            ) : (
+              <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-4 space-y-4 text-center">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider font-mono block">Instructions de Paiement {orderPaymentMethod}</span>
+                  <p className="text-[11px] text-emerald-950 font-semibold leading-normal">
+                    Veuillez scanner le code ci-dessous depuis votre application {orderPaymentMethod} ou composer le code USSD ci-dessous.
+                  </p>
+                </div>
 
-              {/* QR Code */}
-              <div className="bg-white p-3 rounded-2xl border border-amber-200 inline-block mx-auto shadow-sm">
-                <img
-                  src={tmoneyQrImage}
-                  alt="TMoney Merchant QR Code Lgf's Shop"
-                  referrerPolicy="no-referrer"
-                  className="w-48 h-auto mx-auto object-contain rounded-lg"
-                />
-                <div className="text-[10px] font-mono text-emerald-800 mt-2 font-bold tracking-wider">
-                  Numéro Marchand : 1355124 (Lgf's Shop)
+                {/* QR Code */}
+                <div className="bg-white p-3 rounded-2xl border border-amber-200 inline-block mx-auto shadow-sm">
+                  <img
+                    src={tmoneyQrImage}
+                    alt="TMoney Merchant QR Code Lgf's Shop"
+                    referrerPolicy="no-referrer"
+                    className="w-48 h-auto mx-auto object-contain rounded-lg"
+                  />
+                  <div className="text-[10px] font-mono text-emerald-800 mt-2 font-bold tracking-wider">
+                    Numéro Marchand : 1355124 (Lgf's Shop)
+                  </div>
+                </div>
+
+                {/* USSD Box */}
+                <div className="bg-white px-3 py-2 rounded-xl border border-amber-200 flex flex-col items-center justify-center font-mono">
+                  <span className="text-[8px] text-amber-600 font-bold uppercase tracking-wider">Dialer Code USSD ({orderPaymentMethod}) :</span>
+                  <span className="text-xs font-black text-amber-800 tracking-wider select-all mt-0.5">
+                    *145*5*{totalPrice}*1355124#
+                  </span>
                 </div>
               </div>
-
-              {/* USSD Box */}
-              <div className="bg-white px-3 py-2 rounded-xl border border-amber-200 flex flex-col items-center justify-center font-mono">
-                <span className="text-[8px] text-amber-600 font-bold uppercase tracking-wider">Dialer Code USSD (TMoney) :</span>
-                <span className="text-xs font-black text-amber-800 tracking-wider select-all mt-0.5">
-                  *145*5*{totalPrice}*1355124#
-                </span>
-              </div>
-            </div>
+            )}
 
             <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 text-[10px] text-emerald-800 leading-normal">
               🛡️ <b>Fonctionnement du séquestre :</b> En cliquant sur "Confirmer et Payer", vous déclarez avoir envoyé le montant. Les fonds seront conservés en toute sécurité par la LGF jusqu'à ce que vous validiez la réception conforme de votre commande.

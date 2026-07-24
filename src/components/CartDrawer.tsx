@@ -15,6 +15,7 @@ import {
   Check
 } from "lucide-react";
 import { Product } from "../types";
+import EcobankPaymentCard from "./EcobankPaymentCard";
 
 export interface CartItem {
   id: string; // unique cart item compound key
@@ -506,38 +507,42 @@ export default function CartDrawer({
                 <div className="space-y-3">
                   <label className="text-[10px] font-bold text-emerald-700 uppercase block font-mono">Sélectionnez votre mode de consignation :</label>
                   
-                  <div className="grid grid-cols-2 gap-2">
-                    {["TMoney", "Flooz", "Moov", "Card", "COD"].map((method) => {
-                      let label = method;
-                      if (method === "TMoney") label = "TMoney (Togo)";
-                      if (method === "Flooz" || method === "Moov") label = "Flooz / Moov";
-                      if (method === "Card") label = "Carte Bancaire";
-                      if (method === "COD") label = "Cash on Delivery";
-
-                      return (
-                        <button
-                          key={method}
-                          type="button"
-                          onClick={() => setPaymentMethod(method)}
-                          className={`p-3 rounded-xl text-left border transition-all cursor-pointer ${
-                            paymentMethod === method
-                              ? "bg-emerald-600 border-emerald-600 text-white shadow-sm font-extrabold"
-                              : "bg-white border-slate-200 hover:border-slate-300 text-slate-700 font-bold"
-                          }`}
-                        >
-                          <span className="text-xs block">{label}</span>
-                        </button>
-                      );
-                    })}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {[
+                      { id: "TMoney", label: "TMoney (Togo)" },
+                      { id: "Flooz", label: "Moov Flooz" },
+                      { id: "Ecobank", label: "Ecobank QR" },
+                      { id: "Card", label: "Carte / Virement" },
+                      { id: "COD", label: "Cash On Delivery" }
+                    ].map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setPaymentMethod(opt.id)}
+                        className={`p-3 rounded-xl text-left border transition-all cursor-pointer ${
+                          paymentMethod === opt.id
+                            ? "bg-emerald-600 border-emerald-600 text-white shadow-sm font-extrabold"
+                            : "bg-white border-slate-200 hover:border-slate-300 text-slate-700 font-bold"
+                        }`}
+                      >
+                        <span className="text-xs block">{opt.label}</span>
+                      </button>
+                    ))}
                   </div>
 
-                  {paymentMethod === "COD" && (
-                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[10px] text-amber-800 leading-relaxed font-semibold">
-                      ℹ️ <b>Cash on Delivery :</b> Only available through official LGF Couriers. Your order will be shipped securely, and payment is collected at the door.
+                  {(paymentMethod === "Ecobank" || paymentMethod === "Card") && (
+                    <div className="pt-2">
+                      <EcobankPaymentCard amount={grandTotal} formatCurrency={formatCurrency} />
                     </div>
                   )}
 
-                  {paymentMethod !== "COD" && (
+                  {paymentMethod === "COD" && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[10px] text-amber-800 leading-relaxed font-semibold">
+                      ℹ️ <b>Cash on Delivery :</b> Uniquement disponible via les livreurs officiels LGF Couriers à Lomé.
+                    </div>
+                  )}
+
+                  {(paymentMethod === "TMoney" || paymentMethod === "Flooz") && (
                     <div className="space-y-2">
                       <label className="text-[10px] font-bold text-emerald-700 uppercase block font-mono">Numéro Mobile Money (+228) :</label>
                       <input

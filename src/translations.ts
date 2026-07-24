@@ -23,6 +23,19 @@ export const translations = {
     errorOccurred: "Une erreur est survenue.",
     submitting: "Traitement en cours...",
     welcomeBack: "Bienvenue à nouveau,",
+    
+    // E-commerce & Checkout
+    addToCart: "Ajouter au panier",
+    buyNow: "Acheter avec Escrow",
+    mobileMoneyPay: "Paiement Mobile Money (TMoney, Flooz)",
+    ecobankPay: "Carte Bancaire / Ecobank Pay",
+    myFavorites: "Mes Articles Favoris",
+    cartTitle: "Mon Panier d'Achat",
+    emptyCart: "Votre panier est vide",
+    wholesalePrice: "Prix de Gros",
+    filterPrice: "Filtre Prix (FCFA)",
+
+    // KYC & Verification
     kycStatus: "Statut de vérification KYC",
     kycApproved: "Vérifié & Approuvé (Prêt pour transactions)",
     kycPending: "Vérification en cours (En attente d'approbation)",
@@ -36,8 +49,11 @@ export const translations = {
     businessReg: "Registre du Commerce (CFE / RCCM)",
     docNumber: "Numéro de la pièce / Registre",
     docUrl: "Lien de la photo du document (Optionnel)",
+    photoScanDoc: "PHOTO / SCAN DU DOCUMENT D'IDENTITÉ",
     submitKycBtn: "Soumettre la demande de vérification",
     rejectionReason: "Raison du rejet :",
+
+    // Escrow & Portals
     escrowWalletTitle: "Portefeuille Séquestre Sécurisé LGF",
     clearedBalance: "Solde Disponible (Retirable)",
     pendingEscrow: "Solde Bloqué (Sous Escrow)",
@@ -78,6 +94,19 @@ export const translations = {
     errorOccurred: "An error occurred.",
     submitting: "Processing...",
     welcomeBack: "Welcome back,",
+
+    // E-commerce & Checkout
+    addToCart: "Add to Cart",
+    buyNow: "Buy with Escrow",
+    mobileMoneyPay: "Mobile Money Payment (TMoney, Flooz)",
+    ecobankPay: "Bank Card / Ecobank Pay",
+    myFavorites: "My Favorites",
+    cartTitle: "My Shopping Cart",
+    emptyCart: "Your cart is empty",
+    wholesalePrice: "Wholesale Price",
+    filterPrice: "Price Filter (FCFA)",
+
+    // KYC & Verification
     kycStatus: "KYC Verification Status",
     kycApproved: "Verified & Approved (Ready for transactions)",
     kycPending: "Verification pending (Under review)",
@@ -91,8 +120,11 @@ export const translations = {
     businessReg: "Business Registration Certificate (RCCM)",
     docNumber: "Document / Registry Number",
     docUrl: "Document Photo URL (Optional)",
+    photoScanDoc: "IDENTITY DOCUMENT PHOTO / SCAN",
     submitKycBtn: "Submit Verification Request",
     rejectionReason: "Rejection Reason:",
+
+    // Escrow & Portals
     escrowWalletTitle: "LGF Secured Escrow Wallet",
     clearedBalance: "Cleared Balance (Withdrawable)",
     pendingEscrow: "Held in Escrow (Pending delivery)",
@@ -133,6 +165,19 @@ export const translations = {
     errorOccurred: "Vɔ̃ aɖe dzɔ.",
     submitting: "Le dɔ wɔm...",
     welcomeBack: "Woezor gbegbe,",
+
+    // E-commerce & Checkout
+    addToCart: "Da ɖe akpa me (Add to Cart)",
+    buyNow: "Fle kple Escrow",
+    mobileMoneyPay: "Fexe kple Mobile Money (TMoney, Flooz)",
+    ecobankPay: "Fexe kple Ecobank Pay / Card",
+    myFavorites: "Nusiwo vɛvɛ nam",
+    cartTitle: "Nusiwo mefle",
+    emptyCart: "Wò akpa me le ƒu",
+    wholesalePrice: "Asi gã (Wholesale)",
+    filterPrice: "Asi ɖoɖo (FCFA)",
+
+    // KYC & Verification
     kycStatus: "KYC Nuŋlɔɖi Kakaɖedzi",
     kycApproved: "Woda asi ɖe edzi (Approved)",
     kycPending: "Le nu kpɔm kpɔ (Pending)",
@@ -146,8 +191,11 @@ export const translations = {
     businessReg: "Asitsagbalẽ (RCCM / CFE)",
     docNumber: "Nuŋlɔɖi Xexlẽme",
     docUrl: "Nuŋlɔɖi Kpatafefe (Optional)",
+    photoScanDoc: "KAKAÐEDZI GBALẼ ƑE KPATA / SCAN",
     submitKycBtn: "Tsɔ nuŋlɔɖi da asii",
     rejectionReason: "Nusi ta wogbee :",
+
+    // Escrow & Portals
     escrowWalletTitle: "LGF Gakpavi Dzadzraɖo",
     clearedBalance: "Ga si le asiwò kaba",
     pendingEscrow: "Ga si lolo le dɔwɔƒe (Escrow)",
@@ -188,6 +236,19 @@ export const translations = {
     errorOccurred: "Kɩwɛɛkɩm nakʊyʊ tɛzɩ.",
     submitting: "Tʊmɩyɛ wɛɛ kpem...",
     welcomeBack: "Lezʊʊ kɔɔ loba kpem,",
+
+    // E-commerce & Checkout
+    addToCart: "Sʊzɩ pɔtɔɔ taa (Add to Cart)",
+    buyNow: "Yabɩ nɛ Escrow",
+    mobileMoneyPay: "Hɛɛ nɛ Mobile Money (TMoney, Flooz)",
+    ecobankPay: "Hɛɛ nɛ Ecobank Pay / Card",
+    myFavorites: "Mba mɔnsɔɔla yɔ",
+    cartTitle: "Mɔn yabʊ wondu pɔtɔɔ",
+    emptyCart: "Pɔtɔɔ fɛyɩ pʊyʊ",
+    wholesalePrice: "Yabʊ gã asi",
+    filterPrice: "Liidiye lɩzʊʊ (FCFA)",
+
+    // KYC & Verification
     kycStatus: "KYC hɩɖɛ masʊʊ tʊmɩyɛ",
     kycApproved: "Wamʊwa nɛ pitasɩ (Approved)",
     kycPending: "Pɔcɔŋna tʊmɩyɛ yɔɔ (Pending)",
@@ -201,8 +262,11 @@ export const translations = {
     businessReg: "Tʊmɩyɛ masʊʊ takayaɣ (RCCM)",
     docNumber: "Takayaɣ hɩɖɛ xexlɛme",
     docUrl: "Takayaɣ kɩlɛmʊʊ (Optional)",
+    photoScanDoc: "TAKAYAƔ KIꞞƐMꞶꞶ / SCAN",
     submitKycBtn: "Mʊ takayɩsɩ yɔɔ dɔm",
     rejectionReason: "Nʊmɔʊ ŋgʊ pasɩna yaa pagbɛna yɔ :",
+
+    // Escrow & Portals
     escrowWalletTitle: "LGF Portefeuille Escrow yaa Gakpavi",
     clearedBalance: "Liidiye nɖɩ ɖɩwɛ dɔm",
     pendingEscrow: "Liidiye nɖɩ padɔka tʊmɩyɛ taa (Escrow)",

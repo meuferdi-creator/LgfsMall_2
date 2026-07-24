@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Wallet, ShoppingBag, Plus, Clock, Coins, Edit, Trash, AlertCircle, MapPin, Navigation, Save, ShieldCheck, CheckCircle2, BarChart3, Star, Sparkles, Upload, Download } from "lucide-react";
+import { Wallet, ShoppingBag, Plus, Clock, Coins, Edit, Trash, AlertCircle, MapPin, Navigation, Save, ShieldCheck, CheckCircle2, BarChart3, Star, Sparkles, Upload, Download, Calculator, Volume2, VolumeX, Bell, X, KeyRound, Lock } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { User, Product, Order } from "../types";
 import { getGoogleMaps, TOGO_HUBS, calculateRoute } from "../lib/maps";
-import { firestoreSync } from "../lib/firebase";
+import { firestoreSync, auth } from "../lib/firebase";
+import ProductImageUploader from "./ProductImageUploader";
+import SellerProfitCalculator from "./SellerProfitCalculator";
+import { PasswordInput } from "./PasswordInput";
 
 interface VendorPortalProps {
   user: User;
   vendorProducts: Product[];
   vendorOrders: Order[];
-  createProduct: (data: { title: string; description: string; price: number; wholesalePrice?: number; wholesaleMinQty?: number; image?: string; category: string; stock: number }) => Promise<boolean>;
-  updateProduct: (id: string, data: { title?: string; description?: string; price?: number; wholesalePrice?: number; wholesaleMinQty?: number; image?: string; category?: string; stock?: number }) => Promise<boolean>;
+  createProduct: (data: { title: string; description: string; price: number; wholesalePrice?: number; wholesaleMinQty?: number; image?: string; images?: string[]; category: string; stock: number }) => Promise<boolean>;
+  updateProduct: (id: string, data: { title?: string; description?: string; price?: number; wholesalePrice?: number; wholesaleMinQty?: number; image?: string; images?: string[]; category?: string; stock?: number }) => Promise<boolean>;
   deleteProduct: (id: string) => Promise<boolean>;
   withdrawEscrowFunds: (data: { method: string; accountNumber: string }) => Promise<boolean>;
   fetchStats: () => Promise<void>;
@@ -32,8 +35,59 @@ export default function VendorPortal({
   isLoading,
   fetchVendorOrders
 }: VendorPortalProps) {
-  const [vendorTab, setVendorTab] = useState<"articles" | "form" | "sales" | "escrow" | "profil" | "analytics" | "reviews">("articles");
+  const [vendorTab, setVendorTab] = useState<"articles" | "form" | "sales" | "escrow" | "profil" | "analytics" | "reviews" | "calculator">("articles");
   const [dispatchOtp, setDispatchOtp] = useState<{ [orderId: string]: string }>({});
+
+  // Sound and Toast Notifications State
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    return localStorage.getItem("lgf_seller_sound_enabled") !== "false";
+  });
+  const [activeToast, setActiveToast] = useState<{ id: string; title: string; message: string; type: "order" | "payment" | "stock" | "delivery"; orderId?: string } | null>(null);
+  const prevOrdersCountRef = useRef<number>(vendorOrders.length);
+
+  const playNotificationChime = () => {
+    if (!soundEnabled) return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1); // A5
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.45);
+    } catch (e) {
+      console.warn("Audio chime error:", e);
+    }
+  };
+
+  const toggleSound = () => {
+    const next = !soundEnabled;
+    setSoundEnabled(next);
+    localStorage.setItem("lgf_seller_sound_enabled", next ? "true" : "false");
+  };
+
+  // Detect incoming new orders in real-time
+  useEffect(() => {
+    if (vendorOrders.length > prevOrdersCountRef.current && prevOrdersCountRef.current > 0) {
+      const newest = vendorOrders[0];
+      playNotificationChime();
+      setActiveToast({
+        id: newest.id || Date.now().toString(),
+        title: "🛒 Nouvelle commande reçue !",
+        message: `Commande de ${newest.product?.title || "votre article"} (${formatCurrency(newest.total)}).`,
+        type: "order",
+        orderId: newest.id
+      });
+    }
+    prevOrdersCountRef.current = vendorOrders.length;
+  }, [vendorOrders.length]);
 
   // CSV Import States
   const [showCsvImport, setShowCsvImport] = useState(false);
@@ -65,6 +119,55 @@ export default function VendorPortal({
   const [longitude, setLongitude] = useState(1.2125);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileSuccessMsg, setProfileSuccessMsg] = useState("");
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [pwdChangeSuccess, setPwdChangeSuccess] = useState("");
+  const [pwdChangeError, setPwdChangeError] = useState("");
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwdChangeError("");
+    setPwdChangeSuccess("");
+
+    if (newPassword.length < 6) {
+      setPwdChangeError("Le nouveau mot de passe doit contenir au moins 6 caractères.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPwdChangeError("Les nouveaux mots de passe ne correspondent pas.");
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      if (auth?.currentUser) {
+        const { updatePassword } = await import("firebase/auth");
+        await updatePassword(auth.currentUser, newPassword);
+        console.log("🔥 [Firebase Auth] Password successfully updated!");
+      } else {
+        await new Promise((res) => setTimeout(res, 600));
+      }
+      setPwdChangeSuccess("Votre mot de passe a été modifié avec succès !");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => setPwdChangeSuccess(""), 4000);
+    } catch (err: any) {
+      console.error("❌ Error changing password:", err);
+      if (err?.code === "auth/requires-recent-login") {
+        setPwdChangeError("Par mesure de sécurité, veuillez vous déconnecter puis vous reconnected avant de modifier votre mot de passe.");
+      } else {
+        setPwdChangeError("Impossible de modifier le mot de passe: " + (err?.message || "Erreur inconnue"));
+      }
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
 
   const autocompleteRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -257,6 +360,7 @@ export default function VendorPortal({
   const [prodStock, setProdStock] = useState("10");
   const [prodCategory, setProdCategory] = useState("Mode & Textiles");
   const [prodImage, setProdImage] = useState("");
+  const [prodImages, setProdImages] = useState<string[]>([]);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
   // Withdrawal states
@@ -265,6 +369,10 @@ export default function VendorPortal({
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const primaryImg = prodImages.length > 0
+      ? prodImages[0]
+      : (prodImage || "https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=600&auto=format&fit=crop");
+
     const payload = {
       title: prodTitle,
       description: prodDesc,
@@ -273,7 +381,8 @@ export default function VendorPortal({
       wholesaleMinQty: prodWholesaleMinQty ? parseInt(prodWholesaleMinQty) : undefined,
       stock: parseInt(prodStock),
       category: prodCategory,
-      image: prodImage || "https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=600&auto=format&fit=crop"
+      image: primaryImg,
+      images: prodImages
     };
 
     let ok;
@@ -500,6 +609,8 @@ export default function VendorPortal({
     setProdStock(p.stock.toString());
     setProdCategory(p.category);
     setProdImage(p.image || "");
+    const initialImgs = p.images && p.images.length > 0 ? p.images : (p.image ? [p.image] : []);
+    setProdImages(initialImgs);
     setVendorTab("form");
   };
 
@@ -513,13 +624,44 @@ export default function VendorPortal({
     setProdStock("10");
     setProdCategory("Mode & Textiles");
     setProdImage("");
+    setProdImages([]);
     setVendorTab("form");
   };
 
   return (
-    <div id="vendor-portal" className="space-y-6">
-      {/* Navigation Tabs */}
-      <div className="bg-white p-2 rounded-2xl border border-emerald-100 shadow-sm flex space-x-1 overflow-x-auto whitespace-nowrap scrollbar-none">
+    <div id="vendor-portal" className="space-y-6 relative">
+      {/* Real-time Toast Notification Banner */}
+      {activeToast && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-emerald-950 text-white p-4 rounded-2xl shadow-2xl border border-emerald-500/40 animate-bounce flex items-start space-x-3">
+          <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl shrink-0">
+            <Bell className="w-5 h-5 animate-pulse" />
+          </div>
+          <div className="flex-1 text-xs space-y-1">
+            <h4 className="font-extrabold text-amber-400 font-display">{activeToast.title}</h4>
+            <p className="text-slate-200 leading-snug">{activeToast.message}</p>
+            {activeToast.orderId && (
+              <button
+                onClick={() => {
+                  setVendorTab("sales");
+                  setActiveToast(null);
+                }}
+                className="mt-1 text-[10px] font-bold text-emerald-400 underline hover:text-emerald-300 cursor-pointer block"
+              >
+                Voir les détails de la commande →
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => setActiveToast(null)}
+            className="text-slate-400 hover:text-white p-1 rounded-lg"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Header Controls Bar & Navigation Tabs */}
+      <div className="bg-white p-2 rounded-2xl border border-emerald-100 shadow-sm flex items-center space-x-1 overflow-x-auto whitespace-nowrap scrollbar-none">
         <button
           id="tab-vendor-articles"
           onClick={() => setVendorTab("articles")}
@@ -555,6 +697,18 @@ export default function VendorPortal({
         >
           <Clock className="w-4 h-4" />
           <span>Ventes ({filteredVendorOrders.length})</span>
+        </button>
+        <button
+          id="tab-vendor-calculator"
+          onClick={() => setVendorTab("calculator")}
+          className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-2 shrink-0 ${
+            vendorTab === "calculator"
+              ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/10"
+              : "text-emerald-700 hover:bg-emerald-50"
+          }`}
+        >
+          <Calculator className="w-4 h-4" />
+          <span>Calculateur Profit</span>
         </button>
         <button
           id="tab-vendor-analytics"
@@ -611,6 +765,20 @@ export default function VendorPortal({
         >
           <ShieldCheck className="w-4 h-4" />
           <span>Profil Boutique</span>
+        </button>
+
+        {/* Audio Sound Toggle Button */}
+        <button
+          type="button"
+          onClick={toggleSound}
+          className={`p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 shrink-0 ${
+            soundEnabled
+              ? "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
+              : "bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200"
+          }`}
+          title={soundEnabled ? "Alerte sonore activée" : "Alerte sonore désactivée"}
+        >
+          {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-600" /> : <VolumeX className="w-4 h-4 text-slate-400" />}
         </button>
       </div>
 
@@ -909,15 +1077,17 @@ export default function VendorPortal({
             </div>
 
             <div>
-              <label className="text-[10px] font-bold text-emerald-700 uppercase block mb-1">Photo de l'Article (URL) :</label>
-              <input
-                type="text"
-                value={prodImage}
-                onChange={(e) => setProdImage(e.target.value)}
-                placeholder="https://images.unsplash.com/..."
-                className="w-full bg-emerald-50 border border-emerald-100 px-3 py-2 rounded-xl text-xs text-emerald-950 focus:outline-none font-mono"
+              <ProductImageUploader
+                images={prodImages}
+                onChange={(newImgs) => {
+                  setProdImages(newImgs);
+                  if (newImgs.length > 0) {
+                    setProdImage(newImgs[0]);
+                  } else {
+                    setProdImage("");
+                  }
+                }}
               />
-              <p className="text-[9px] text-emerald-500 mt-1">Laissez vide pour utiliser l'image d'illustration par défaut.</p>
             </div>
 
             <div className="flex space-x-3 pt-3 border-t border-emerald-50">
@@ -1461,8 +1631,66 @@ export default function VendorPortal({
                 <span>{isSavingProfile ? "Enregistrement en cours..." : "Enregistrer le Profil de la Boutique"}</span>
               </button>
             </form>
+
+            {/* Sécurité et Changement de mot de passe */}
+            <div className="mt-8 pt-8 border-t border-emerald-100/80">
+              <div className="flex items-center space-x-2 mb-4">
+                <KeyRound className="w-5 h-5 text-emerald-600" />
+                <h4 className="text-base font-bold font-display text-emerald-950">Sécurité du Compte & Mot de passe</h4>
+              </div>
+
+              {pwdChangeSuccess && (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 p-4 rounded-xl flex items-center space-x-2 mb-4 text-xs font-semibold animate-fade-in">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{pwdChangeSuccess}</span>
+                </div>
+              )}
+
+              {pwdChangeError && (
+                <div className="bg-rose-50 border border-rose-200 text-rose-900 p-4 rounded-xl flex items-center space-x-2 mb-4 text-xs font-semibold animate-fade-in">
+                  <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                  <span>{pwdChangeError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
+                <PasswordInput
+                  label="Nouveau mot de passe"
+                  requiredStar
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Minimim 6 caractères"
+                  autoComplete="new-password"
+                />
+
+                <PasswordInput
+                  label="Confirmer le nouveau mot de passe"
+                  requiredStar
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Répétez le mot de passe"
+                  autoComplete="new-password"
+                />
+
+                <button
+                  type="submit"
+                  disabled={isChangingPassword || !newPassword || !confirmPassword}
+                  className="bg-emerald-800 hover:bg-emerald-900 text-white font-bold py-3 px-5 rounded-xl text-xs cursor-pointer flex items-center justify-center space-x-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Lock className="w-4 h-4" />
+                  <span>{isChangingPassword ? "Mise à jour..." : "Mettre à jour le mot de passe"}</span>
+                </button>
+              </form>
+            </div>
           </div>
         </div>
+      )}
+
+      {/* Profit Calculator Tab */}
+      {vendorTab === "calculator" && (
+        <SellerProfitCalculator formatCurrency={formatCurrency} />
       )}
 
       {/* Sales Analytics Tab */}

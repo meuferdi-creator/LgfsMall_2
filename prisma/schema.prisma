@@ -1,5 +1,5 @@
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -49,6 +49,7 @@ model Product {
   wholesalePrice  Float?   // Wholesale price in XOF
   wholesaleMinQty Int?     // Minimum quantity for wholesale
   image           String?
+  images          String?  // JSON stringified list of image URLs
   category        String
   stock           Int      @default(0)
   vendorId        String

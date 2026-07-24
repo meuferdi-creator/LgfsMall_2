@@ -353,14 +353,37 @@ export default function AdminPortal({
                   </div>
 
                   {kyc.documentUrl && (
-                    <div className="bg-white p-2 rounded-xl border border-emerald-100">
-                      <span className="text-emerald-500 text-[9px] block font-bold uppercase mb-1 font-mono">Photo / Document officiel :</span>
-                      <img 
-                        src={kyc.documentUrl} 
-                        alt="KYC User Submission" 
-                        referrerPolicy="no-referrer"
-                        className="w-full max-h-40 object-contain rounded-lg border border-slate-200 bg-slate-50" 
-                      />
+                    <div className="bg-white p-3 rounded-xl border border-emerald-100 space-y-2">
+                      <div className="flex justify-between items-center font-mono">
+                        <span className="text-emerald-600 text-[9px] font-extrabold uppercase">Scan / Document officiel soumis :</span>
+                        <a
+                          href={kyc.documentUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[10px] text-emerald-700 font-bold underline hover:text-emerald-900"
+                        >
+                          Agrandir / Télécharger ↗
+                        </a>
+                      </div>
+                      {kyc.documentUrl.startsWith("data:application/pdf") ? (
+                        <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 font-bold flex items-center justify-between">
+                          <span>Document au format PDF</span>
+                          <a
+                            href={kyc.documentUrl}
+                            download="KYC_Document.pdf"
+                            className="px-2.5 py-1 bg-rose-600 text-white rounded-md text-[10px]"
+                          >
+                            Télécharger PDF
+                          </a>
+                        </div>
+                      ) : (
+                        <img 
+                          src={kyc.documentUrl} 
+                          alt="KYC User Submission" 
+                          referrerPolicy="no-referrer"
+                          className="w-full max-h-56 object-contain rounded-lg border border-slate-200 bg-slate-900/5 shadow-inner" 
+                        />
+                      )}
                     </div>
                   )}
 

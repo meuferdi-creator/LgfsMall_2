@@ -1,0 +1,186 @@
+{
+  "exportDate": "2026-07-24T11:17:14.461Z",
+  "sourceFile": "/tmp/prisma/dev.db",
+  "counts": {
+    "users": 4,
+    "kycs": 1,
+    "products": 4,
+    "orders": 0,
+    "escrowWallets": 1,
+    "investments": 1,
+    "liveStreams": 0,
+    "messages": 0
+  },
+  "users": [
+    {
+      "id": "f9f2f69a-65ee-48b5-a087-e1bc68e2ef08",
+      "email": "arriveramegne@gmail.com",
+      "password": "$2b$10$9BGThmWWTgmGcZrdRs5ixeYNrnLn/nC8cHegKzq/46OhPhTxoDLru",
+      "name": "LGF Admin (Arrive Ramegne)",
+      "phone": "+228 72998148",
+      "role": "ADMIN",
+      "isEmailVerified": false,
+      "createdAt": "2026-07-24T07:53:27.105Z",
+      "updatedAt": "2026-07-24T07:53:27.105Z",
+      "kyc": null,
+      "escrowWallet": null
+    },
+    {
+      "id": "4efd2194-730e-4e2d-b71f-c83a844b9ad6",
+      "email": "meuferdi@gmail.com",
+      "password": "$2b$10$9BGThmWWTgmGcZrdRs5ixeYNrnLn/nC8cHegKzq/46OhPhTxoDLru",
+      "name": "Ferdinand Meugré",
+      "phone": "+228 92 11 22 33",
+      "role": "BUYER",
+      "isEmailVerified": false,
+      "createdAt": "2026-07-24T07:53:27.114Z",
+      "updatedAt": "2026-07-24T07:53:27.114Z",
+      "kyc": null,
+      "escrowWallet": null
+    },
+    {
+      "id": "85f2efa5-4740-4c8c-84ae-be0a76e9295c",
+      "email": "official.store@lgfmall.tg",
+      "password": "$2b$10$wDNkvAYbvXC0JdE/Pik6GedTi7.Qj.BWP1S6.cS99yg3oPBd8hXB.",
+      "name": "LGF's Mall Official Store",
+      "phone": "+228 72 99 81 48",
+      "role": "VENDOR",
+      "isEmailVerified": false,
+      "createdAt": "2026-07-24T09:00:50.877Z",
+      "updatedAt": "2026-07-24T09:00:50.877Z",
+      "kyc": {
+        "id": "2a94b7bc-a344-4ac7-a2ef-41bb6bb91a42",
+        "userId": "85f2efa5-4740-4c8c-84ae-be0a76e9295c",
+        "status": "APPROVED",
+        "documentType": "BUSINESS_REGISTRATION",
+        "documentUrl": "https://images.unsplash.com/photo-1606857521015-7f9fcf423740?w=600",
+        "idNumber": "TG-LOM-2026-OFFICIAL",
+        "rejectionReason": null,
+        "createdAt": "2026-07-24T09:00:50.880Z",
+        "updatedAt": "2026-07-24T09:24:26.107Z"
+      },
+      "escrowWallet": {
+        "id": "441d5bbc-ca00-4134-926c-8cff1f1c6db7",
+        "vendorId": "85f2efa5-4740-4c8c-84ae-be0a76e9295c",
+        "balance": 1500000,
+        "pendingBalance": 0,
+        "currency": "XOF",
+        "createdAt": "2026-07-24T09:00:50.879Z",
+        "updatedAt": "2026-07-24T09:00:50.879Z"
+      }
+    },
+    {
+      "id": "f2c6114c-de2e-4c1e-b2c2-219cb95fb42f",
+      "email": "koffi.togo@gmail.com",
+      "password": "$2b$10$iGSf3EZOjI5NSHX3wCibMevxdlxQEyjo0lFoMQiLJf7KXi/AoS4Kq",
+      "name": "Koffi Mensah",
+      "phone": "",
+      "role": "BUYER",
+      "isEmailVerified": false,
+      "createdAt": "2026-07-24T09:52:28.545Z",
+      "updatedAt": "2026-07-24T09:52:28.545Z",
+      "kyc": null,
+      "escrowWallet": null
+    }
+  ],
+  "kycs": [
+    {
+      "id": "2a94b7bc-a344-4ac7-a2ef-41bb6bb91a42",
+      "userId": "85f2efa5-4740-4c8c-84ae-be0a76e9295c",
+      "status": "APPROVED",
+      "documentType": "BUSINESS_REGISTRATION",
+      "documentUrl": "https://images.unsplash.com/photo-1606857521015-7f9fcf423740?w=600",
+      "idNumber": "TG-LOM-2026-OFFICIAL",
+      "rejectionReason": null,
+      "createdAt": "2026-07-24T09:00:50.880Z",
+      "updatedAt": "2026-07-24T09:24:26.107Z"
+    }
+  ],
+  "products": [
+    {
+      "id": "ce24cafd-ed99-4aa4-8d28-c7a0b2a46293",
+      "title": "Rideaux Haute Qualité (La Paire) – Design Élégant",
+      "description": "Habillez vos fenêtres avec élégance grâce à nos rideaux de haute qualité. Tissu résistant, finitions soignées et tombé impeccable pour sublimer votre intérieur.",
+      "price": 3500,
+      "wholesalePrice": 3000,
+      "wholesaleMinQty": 6,
+      "image": "https://i.ibb.co/DjFtx2F/PHOTO-2026-07-20-18-33-43-1.jpg",
+      "images": "[\"https://i.ibb.co/DjFtx2F/PHOTO-2026-07-20-18-33-43-1.jpg\",\"https://i.ibb.co/qFBf8Rnw/PHOTO-2026-07-20-18-33-42.jpg\"]",
+      "category": "Maison & Décoration / Rideaux",
+      "stock": 100,
+      "vendorId": "85f2efa5-4740-4c8c-84ae-be0a76e9295c",
+      "createdAt": "2026-07-24T09:00:50.885Z",
+      "updatedAt": "2026-07-24T09:00:50.885Z"
+    },
+    {
+      "id": "33678540-ee0d-436b-aeb5-b87f20226506",
+      "title": "Rideaux Confort (La Paire) – Excellent Rapport Qualité/Prix",
+      "description": "Apportez une touche de fraîcheur et de modernité à vos pièces à petit prix. Des rideaux pratiques, faciles à installer et parfaits pour le quotidien.",
+      "price": 6500,
+      "wholesalePrice": 6000,
+      "wholesaleMinQty": 6,
+      "image": "https://i.ibb.co/WWKfZ8Lc/PHOTO-2026-07-20-18-33-32-1.jpg",
+      "images": "[\"https://i.ibb.co/WWKfZ8Lc/PHOTO-2026-07-20-18-33-32-1.jpg\",\"https://i.ibb.co/mPz6v1H/PHOTO-2026-07-20-18-33-32.jpg\",\"https://i.ibb.co/v6ZWhh6T/PHOTO-2026-07-20-18-33-31-1.jpg\",\"https://i.ibb.co/FdPrkw9/PHOTO-2026-07-20-18-33-31.jpg\"]",
+      "category": "Maison & Décoration / Rideaux",
+      "stock": 100,
+      "vendorId": "85f2efa5-4740-4c8c-84ae-be0a76e9295c",
+      "createdAt": "2026-07-24T09:00:50.886Z",
+      "updatedAt": "2026-07-24T09:00:50.886Z"
+    },
+    {
+      "id": "ab13f9fd-c9e9-4e12-95b7-faf48d8e35c7",
+      "title": "Tapis Douillet Premium – Confort et Style",
+      "description": "Un tapis ultra-doux et coloré pour réchauffer l'ambiance de votre salon ou de votre chambre. Offre une excellente sensation sous les pieds et retient bien la poussière.",
+      "price": 15000,
+      "wholesalePrice": 14000,
+      "wholesaleMinQty": 2,
+      "image": "https://i.ibb.co/7dxKGgWg/PHOTO-2026-07-20-18-33-51.jpg",
+      "images": "[\"https://i.ibb.co/7dxKGgWg/PHOTO-2026-07-20-18-33-51.jpg\",\"https://i.ibb.co/sd06NSgy/PHOTO-2026-07-20-18-33-52-2.jpg\",\"https://i.ibb.co/pvZnrxVX/PHOTO-2026-07-20-18-33-52-1.jpg\",\"https://i.ibb.co/fYKVgdDZ/PHOTO-2026-07-20-18-33-52.jpg\"]",
+      "category": "Maison & Décoration / Tapis",
+      "stock": 50,
+      "vendorId": "85f2efa5-4740-4c8c-84ae-be0a76e9295c",
+      "createdAt": "2026-07-24T09:00:50.887Z",
+      "updatedAt": "2026-07-24T09:00:50.887Z"
+    },
+    {
+      "id": "73951a61-15f9-40e6-a812-ef95c75552ad",
+      "title": "Masque de Visage Hydratant – Éclat et Fraîcheur",
+      "description": "Offrez un moment de pure détente à votre peau. Ce masque purifie, hydrate en profondeur et redonne instantanément de l'éclat à votre teint. Idéal pour votre routine beauté.",
+      "price": 300,
+      "wholesalePrice": 200,
+      "wholesaleMinQty": 12,
+      "image": "https://i.ibb.co/VcS5WL5b/PHOTO-2026-07-20-18-33-53-2.jpg",
+      "images": "[\"https://i.ibb.co/VcS5WL5b/PHOTO-2026-07-20-18-33-53-2.jpg\",\"https://i.ibb.co/JRCyHBz1/PHOTO-2026-07-20-18-33-53-1.jpg\",\"https://i.ibb.co/fdz8HbWX/PHOTO-2026-07-20-18-33-53.jpg\"]",
+      "category": "Beauté & Soins / Visage",
+      "stock": 500,
+      "vendorId": "85f2efa5-4740-4c8c-84ae-be0a76e9295c",
+      "createdAt": "2026-07-24T09:00:50.888Z",
+      "updatedAt": "2026-07-24T09:00:50.888Z"
+    }
+  ],
+  "orders": [],
+  "escrowWallets": [
+    {
+      "id": "441d5bbc-ca00-4134-926c-8cff1f1c6db7",
+      "vendorId": "85f2efa5-4740-4c8c-84ae-be0a76e9295c",
+      "balance": 1500000,
+      "pendingBalance": 0,
+      "currency": "XOF",
+      "createdAt": "2026-07-24T09:00:50.879Z",
+      "updatedAt": "2026-07-24T09:00:50.879Z"
+    }
+  ],
+  "investments": [
+    {
+      "id": "2fca8bbc-e4bd-44e2-be86-d01b9e08ed7e",
+      "investorId": "f9f2f69a-65ee-48b5-a087-e1bc68e2ef08",
+      "amount": 5000000,
+      "status": "ACTIVE",
+      "roi": 12.5,
+      "createdAt": "2026-07-24T07:53:27.117Z",
+      "updatedAt": "2026-07-24T07:53:27.117Z"
+    }
+  ],
+  "liveStreams": [],
+  "messages": []
+}

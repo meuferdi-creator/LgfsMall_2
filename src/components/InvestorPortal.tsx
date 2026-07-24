@@ -15,6 +15,7 @@ import {
   Wallet 
 } from "lucide-react";
 import { Investment } from "../types";
+import InvestorAnalyticsCharts from "./InvestorAnalyticsCharts";
 
 interface InvestorPortalProps {
   investments: Investment[];
@@ -262,6 +263,9 @@ export default function InvestorPortal({
               </p>
             </div>
           </div>
+
+          {/* Recharts Analytics Charts Section */}
+          <InvestorAnalyticsCharts formatCurrency={formatCurrency} isLoading={isLoading} />
 
           {/* YIELD DISTRIBUTION CALENDAR SECTION */}
           <div className="bg-white rounded-3xl p-8 border border-emerald-100/50 shadow-xl text-emerald-950 space-y-6">

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { ShoppingBag, ArrowRight, Check, HelpCircle, Layers, TrendingDown } from "lucide-react";
+import { ShoppingBag, ArrowRight, Check, HelpCircle, Layers, TrendingDown, Heart } from "lucide-react";
 import { Product } from "../types";
 import { firestoreSync } from "../lib/firebase";
+import { useAppStore } from "../store";
 
 interface ProductCardProps {
   product: Product;
@@ -18,8 +19,17 @@ export default function ProductCard({
   actionText = "Acheter avec Escrow",
   onOpenDetail
 }: ProductCardProps) {
+  const { wishlist, toggleWishlist } = useAppStore();
+  const isFavorite = wishlist.includes(product.id);
   const [qty, setQty] = useState(1);
   const [vendorProfile, setVendorProfile] = useState<any | null>(null);
+  const [selectedImageIdx, setSelectedImageIdx] = useState(0);
+
+  const productImages = (product.images && Array.isArray(product.images) && product.images.length > 0)
+    ? product.images
+    : (product.image ? [product.image] : ["https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=600&auto=format&fit=crop"]);
+
+  const activeImage = productImages[selectedImageIdx] || productImages[0];
 
   useEffect(() => {
     const loadVendorProfile = async () => {
@@ -97,27 +107,64 @@ export default function ProductCard({
         {/* Product Image & Badge Overlay */}
         <div className="relative aspect-video bg-emerald-50/30 overflow-hidden">
           <img
-            src={product.image || "https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=600&auto=format&fit=crop"}
+            src={activeImage}
             alt={product.title}
             referrerPolicy="no-referrer"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
+
+          {/* Multiple Image Thumbnail Selector */}
+          {productImages.length > 1 && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 flex space-x-1 z-10 bg-black/60 backdrop-blur-md px-2 py-1 rounded-full border border-white/20">
+              {productImages.map((_, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedImageIdx(idx);
+                  }}
+                  className={`w-2 h-2 rounded-full transition-all cursor-pointer ${
+                    selectedImageIdx === idx ? "bg-amber-400 scale-125" : "bg-white/50 hover:bg-white"
+                  }`}
+                  title={`Photo ${idx + 1}`}
+                />
+              ))}
+            </div>
+          )}
           
           {/* Category Badge */}
           <span className="absolute top-3 left-3 bg-emerald-600/95 backdrop-blur-md text-white font-mono text-[9px] font-bold px-2.5 py-1 rounded-lg uppercase tracking-wider">
             {product.category}
           </span>
 
-          {/* Stock Badge */}
-          {product.stock === 0 ? (
-            <span className="absolute top-3 right-3 bg-rose-600 text-white font-mono text-[9px] font-bold px-2.5 py-1 rounded-lg uppercase">
-              Rupture
-            </span>
-          ) : (
-            <span className="absolute top-3 right-3 bg-amber-500 text-emerald-950 font-mono text-[9px] font-bold px-2.5 py-1 rounded-lg uppercase">
-              Stock: {product.stock}
-            </span>
-          )}
+          {/* Heart Wishlist Button & Stock Badge */}
+          <div className="absolute top-3 right-3 flex items-center space-x-1.5">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleWishlist(product.id);
+              }}
+              className={`p-1.5 rounded-full backdrop-blur-md shadow-md transition-all transform active:scale-125 cursor-pointer ${
+                isFavorite
+                  ? "bg-rose-500 text-white hover:bg-rose-600"
+                  : "bg-white/80 hover:bg-white text-slate-600 hover:text-rose-500"
+              }`}
+              title={isFavorite ? "Retirer de mes favoris" : "Ajouter à mes favoris"}
+            >
+              <Heart className={`w-3.5 h-3.5 ${isFavorite ? "fill-white" : ""}`} />
+            </button>
+
+            {product.stock === 0 ? (
+              <span className="bg-rose-600 text-white font-mono text-[9px] font-bold px-2.5 py-1 rounded-lg uppercase">
+                Rupture
+              </span>
+            ) : (
+              <span className="bg-amber-500 text-emerald-950 font-mono text-[9px] font-bold px-2.5 py-1 rounded-lg uppercase">
+                Stock: {product.stock}
+              </span>
+            )}
+          </div>
 
           {/* Wholesale Eligible Glow Badge */}
           {hasWholesale && !isWholesaleActive && (

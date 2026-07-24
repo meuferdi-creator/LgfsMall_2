@@ -44,8 +44,8 @@ interface AppState {
 
   fetchProducts: () => Promise<void>;
   fetchVendorProducts: () => Promise<void>;
-  createProduct: (data: { title: string; description: string; price: number; wholesalePrice?: number; wholesaleMinQty?: number; image?: string; category: string; stock: number }) => Promise<boolean>;
-  updateProduct: (id: string, data: { title?: string; description?: string; price?: number; wholesalePrice?: number; wholesaleMinQty?: number; image?: string; category?: string; stock?: number }) => Promise<boolean>;
+  createProduct: (data: { title: string; description: string; price: number; wholesalePrice?: number; wholesaleMinQty?: number; image?: string; images?: string[]; category: string; stock: number }) => Promise<boolean>;
+  updateProduct: (id: string, data: { title?: string; description?: string; price?: number; wholesalePrice?: number; wholesaleMinQty?: number; image?: string; images?: string[]; category?: string; stock?: number }) => Promise<boolean>;
   deleteProduct: (id: string) => Promise<boolean>;
   placeOrder: (data: { productId: string; quantity: number; paymentMethod: string }) => Promise<boolean>;
   fetchBuyerOrders: () => Promise<void>;
@@ -60,6 +60,7 @@ interface AppState {
   updateCartQuantity: (itemId: string, quantity: number) => void;
   clearCart: () => void;
   toggleWishlist: (productId: string) => void;
+  clearWishlist: () => void;
   loadLocalCartAndWishlist: () => void;
   syncCartWithFirebase: (userId: string) => Promise<void>;
 }
@@ -386,7 +387,22 @@ export const useAppStore = create<AppState>((set, get) => ({
       const res = await fetch(`${API_BASE}/products`);
       if (res.ok) {
         const data = await res.json();
-        set({ products: data });
+        const parsed = data.map((p: any) => {
+          let imgs = p.images;
+          if (typeof imgs === "string") {
+            try { imgs = JSON.parse(imgs); } catch (e) { imgs = [p.image].filter(Boolean); }
+          }
+          if (!Array.isArray(imgs) || imgs.length === 0) {
+            imgs = [p.image].filter(Boolean);
+          }
+          return { ...p, images: imgs };
+        });
+        set({ products: parsed });
+
+        // Save each product to Firestore for cloud persistence
+        parsed.forEach((prod: any) => {
+          firestoreSync.saveDocument("products", prod.id, prod);
+        });
       }
     } catch (err) {
       console.error("Error fetching products:", err);
@@ -403,7 +419,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
       if (res.ok) {
         const data = await res.json();
-        set({ vendorProducts: data });
+        const parsed = data.map((p: any) => {
+          let imgs = p.images;
+          if (typeof imgs === "string") {
+            try { imgs = JSON.parse(imgs); } catch (e) { imgs = [p.image].filter(Boolean); }
+          }
+          if (!Array.isArray(imgs) || imgs.length === 0) {
+            imgs = [p.image].filter(Boolean);
+          }
+          return { ...p, images: imgs };
+        });
+        set({ vendorProducts: parsed });
       }
     } catch (err) {
       console.error("Error fetching vendor products:", err);
@@ -822,6 +848,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     set({ wishlist: updatedWishlist });
     localStorage.setItem("lgf_wishlist", JSON.stringify(updatedWishlist));
+  },
+
+  clearWishlist: () => {
+    set({ wishlist: [] });
+    localStorage.removeItem("lgf_wishlist");
   },
 
   loadLocalCartAndWishlist: () => {

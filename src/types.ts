@@ -62,6 +62,7 @@ export interface Product {
   wholesalePrice: number | null;
   wholesaleMinQty: number | null;
   image: string | null;
+  images?: string[] | null;
   category: string;
   stock: number;
   vendorId: string;
@@ -83,6 +84,8 @@ export interface Order {
   currency: string;
   paymentMethod: string | null;
   escrowWalletId: string | null;
+  product?: Product | null;
+  productTitle?: string | null;
   escrowWallet?: {
     id: string;
     vendorId: string;

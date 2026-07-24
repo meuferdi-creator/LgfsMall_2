@@ -11,6 +11,9 @@ import SeoStructuredData from "./components/SeoStructuredData";
 import LiveCommerce from "./components/LiveCommerce";
 import ProductCard from "./components/ProductCard";
 import CartDrawer from "./components/CartDrawer";
+import KycDocumentUploader from "./components/KycDocumentUploader";
+import { PasswordInput } from "./components/PasswordInput";
+import { PasswordResetModal } from "./components/PasswordResetModal";
 import { executeGoogleSignIn, isFirebaseConfigured } from "./lib/firebase";
 import { 
   ShoppingBag, 
@@ -145,6 +148,7 @@ export default function App() {
   // Login form state
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
   // KYC submission form state
   const [kycDocType, setKycDocType] = useState("NATIONAL_ID");
@@ -642,17 +646,23 @@ export default function App() {
                     </div>
 
                     <div>
-                      <label className="text-[11px] uppercase font-bold tracking-widest text-emerald-800 mb-2 block font-mono">
-                        {t.password} <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="password"
+                      <PasswordInput
+                        label={t.password}
+                        requiredStar
                         required
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
                         placeholder="••••••••"
-                        className="w-full bg-emerald-50 border border-emerald-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-emerald-950"
                       />
+                      <div className="flex items-center justify-end text-xs mt-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsResetModalOpen(true)}
+                          className="text-emerald-600 font-bold hover:text-emerald-800 hover:underline cursor-pointer transition-colors"
+                        >
+                          Mot de passe oublié ?
+                        </button>
+                      </div>
                     </div>
 
                     <button
@@ -775,16 +785,13 @@ export default function App() {
                     </div>
 
                     <div>
-                      <label className="text-[11px] uppercase font-bold tracking-widest text-emerald-800 mb-2 block font-mono">
-                        {t.password} <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="password"
+                      <PasswordInput
+                        label={t.password}
+                        requiredStar
                         required
                         value={regPassword}
                         onChange={(e) => setRegPassword(e.target.value)}
                         placeholder="••••••••"
-                        className="w-full bg-emerald-50 border border-emerald-100 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-emerald-950"
                       />
                     </div>
 
@@ -885,6 +892,10 @@ export default function App() {
                   className="bg-emerald-950/50 border border-emerald-700/40 px-4 py-3 rounded-xl text-xs text-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium cursor-pointer"
                 >
                   <option value="Tous">Toutes Catégories</option>
+                  <option value="Maison & Décoration">Maison & Décoration</option>
+                  <option value="Maison & Décoration / Rideaux">Rideaux</option>
+                  <option value="Maison & Décoration / Tapis">Tapis</option>
+                  <option value="Beauté & Soins / Visage">Soins Visage</option>
                   <option value="Mode & Textiles">Mode & Textiles</option>
                   <option value="Cosmétiques & Beauté">Cosmétiques & Beauté</option>
                   <option value="Alimentation">Alimentation</option>
@@ -900,13 +911,15 @@ export default function App() {
                 <p className="text-sm font-semibold text-emerald-500">Aucun produit disponible pour le moment.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
                 {products
                   .filter((p) => {
                     const matchesSearch = p.title.toLowerCase().includes(catalogSearch.toLowerCase()) || 
                                           p.description.toLowerCase().includes(catalogSearch.toLowerCase()) ||
                                           p.category.toLowerCase().includes(catalogSearch.toLowerCase());
-                    const matchesCategory = catalogCategory === "Tous" || p.category === catalogCategory;
+                    const matchesCategory = catalogCategory === "Tous" || 
+                                            p.category.toLowerCase().includes(catalogCategory.toLowerCase()) || 
+                                            catalogCategory.toLowerCase().includes(p.category.toLowerCase());
                     return matchesSearch && matchesCategory;
                   })
                   .map((p) => (
@@ -1091,16 +1104,11 @@ export default function App() {
                         />
                       </div>
 
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-emerald-700 uppercase">{t.docUrl}</label>
-                        <input
-                          type="text"
-                          value={kycDocUrl}
-                          onChange={(e) => setKycDocUrl(e.target.value)}
-                          placeholder="https://images.unsplash.com/... (Image de la pièce)"
-                          className="w-full bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-xl text-xs text-emerald-950 focus:outline-none"
-                        />
-                      </div>
+                      <KycDocumentUploader
+                        value={kycDocUrl}
+                        onChange={(dataUrl) => setKycDocUrl(dataUrl)}
+                        disabled={isLoading}
+                      />
 
                       <button
                         type="submit"
@@ -1710,6 +1718,14 @@ export default function App() {
           <span className="text-[10px] font-bold">{user ? "Profil" : "Connexion"}</span>
         </button>
       </nav>
+
+      {/* Password Reset Modal */}
+      <PasswordResetModal
+        isOpen={isResetModalOpen}
+        onClose={() => setIsResetModalOpen(false)}
+        initialEmail={loginEmail}
+        onReturnToLogin={() => setAuthMode("login")}
+      />
 
     </div>
   );

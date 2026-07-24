@@ -110,7 +110,9 @@ export default function ProductDetailModal({
 
   // Load secondary images
   const extraImages = CATEGORY_IMAGES[product.category] || CATEGORY_IMAGES["Mode & Textiles"];
-  const allImages = [product.image || extraImages[0], ...extraImages.slice(1)];
+  const allImages = (product.images && product.images.length > 0)
+    ? product.images
+    : [product.image || extraImages[0], ...extraImages.slice(1)];
 
   useEffect(() => {
     setActiveImage(product.image || allImages[0]);
