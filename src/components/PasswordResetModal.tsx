@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth, isFirebaseConfigured } from "../lib/firebase";
+import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
 import { KeyRound, Mail, ArrowLeft, CheckCircle2, AlertCircle, Loader2, RefreshCw, X } from "lucide-react";
 
 interface PasswordResetModalProps {
@@ -84,7 +85,13 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
     setIsLoading(true);
 
     try {
-      if (isFirebaseConfigured && auth) {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.auth.resetPasswordForEmail(cleanedEmail, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+        if (error) throw error;
+        console.log("⚡ [Supabase Auth] Password reset email sent to:", cleanedEmail);
+      } else if (isFirebaseConfigured && auth) {
         await sendPasswordResetEmail(auth, cleanedEmail);
         console.log("🔥 [Firebase Auth] Password reset email sent to:", cleanedEmail);
       } else {

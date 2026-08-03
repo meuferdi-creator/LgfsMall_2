@@ -9,6 +9,7 @@ import CartDrawer from "./CartDrawer";
 import FacetedSearchPanel, { FacetedFilterState } from "./FacetedSearchPanel";
 import EcobankPaymentCard from "./EcobankPaymentCard";
 import WishlistSection from "./WishlistSection";
+import HomePageSections from "./HomePageSections";
 import { motion, AnimatePresence } from "motion/react";
 
 interface BuyerPortalProps {
@@ -355,6 +356,19 @@ export default function BuyerPortal({
               </AnimatePresence>
             </motion.div>
           )}
+
+          {/* Home Page Additional Sections (Categories, Meilleures ventes, Coupons, Boutiques, Marques, App Box) */}
+          <HomePageSections
+            products={products}
+            formatCurrency={formatCurrency}
+            onSelectCategory={(cat) => setFacetedFilters((prev) => ({ ...prev, selectedCategory: cat }))}
+            onBuyProduct={(productId, qty) => {
+              setOrderProductId(productId);
+              setOrderQty(qty);
+              setBuyerTab("order");
+            }}
+            onOpenDetail={(product) => setSelectedModalProduct(product)}
+          />
         </div>
       )}
 

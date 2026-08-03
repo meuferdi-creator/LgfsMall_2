@@ -181,25 +181,41 @@ export default function ProductDetailModal({
       <div className="bg-white rounded-3xl max-w-5xl w-full overflow-hidden border border-emerald-100 shadow-2xl flex flex-col my-4 sm:my-8 relative text-emerald-950 animate-scale-in">
         
         {/* Top Header Navigation Bar */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-white">
-          <button
-            onClick={onClose}
-            aria-label="Retour aux articles"
-            className="inline-flex items-center space-x-1.5 text-slate-600 hover:text-emerald-600 font-bold text-xs transition-all cursor-pointer bg-slate-100 hover:bg-emerald-50 px-3 py-1.5 rounded-xl border border-slate-200/50"
-          >
-            <span>← Retour aux articles</span>
-          </button>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 gap-2">
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={onClose}
+              aria-label="Retour aux produits"
+              className="inline-flex items-center space-x-1.5 text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 font-extrabold text-xs transition-all cursor-pointer bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900 px-3.5 py-2 rounded-xl border border-emerald-200 dark:border-emerald-800 shadow-xs"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>← Retour aux produits</span>
+            </button>
+
+            {/* Breadcrumb Navigation */}
+            <div className="hidden md:flex items-center space-x-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+              <span className="hover:text-emerald-600 cursor-pointer" onClick={onClose}>Accueil</span>
+              <ChevronRight className="w-3 h-3 text-slate-300" />
+              <span className="hover:text-emerald-600 cursor-pointer" onClick={onClose}>Catalogue</span>
+              <ChevronRight className="w-3 h-3 text-slate-300" />
+              <span className="text-emerald-700 dark:text-emerald-400 font-bold truncate max-w-[180px]">{product.category}</span>
+            </div>
+          </div>
           
-          <span id="product-detail-modal-title" className="text-xs font-mono font-bold text-emerald-600 hidden sm:inline uppercase">Détails de l'article</span>
-          
-          <button 
-            onClick={onClose}
-            aria-label="Fermer la fiche produit"
-            className="text-slate-400 hover:text-rose-600 p-1.5 transition-all cursor-pointer"
-            title="Fermer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
+            <span id="product-detail-modal-title" className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 uppercase">
+              Fiche Produit LGF
+            </span>
+            
+            <button 
+              onClick={onClose}
+              aria-label="Fermer la fiche produit"
+              className="text-slate-400 hover:text-rose-600 p-1.5 transition-all cursor-pointer rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
+              title="Fermer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Grid */}
@@ -510,28 +526,38 @@ export default function ProductDetailModal({
                 </div>
 
                 {/* Main Action Buttons */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3">
-                  <button
-                    onClick={() => {
-                      onAddToCart(product, qty, selectedSize, selectedColor);
-                      onClose();
-                    }}
-                    className="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-950 font-bold py-3.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-xs"
-                  >
-                    <ShoppingBag className="w-4 h-4 text-emerald-800" />
-                    <span>Ajouter au Panier</span>
-                  </button>
-                  
-                  <button
-                    onClick={() => {
-                      onBuyNow(product.id, qty);
-                      onClose();
-                    }}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-md shadow-emerald-600/10"
-                  >
-                    <span>Acheter Immédiatement</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
+                <div className="space-y-3 pt-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <button
+                      onClick={onClose}
+                      className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer border border-slate-200"
+                    >
+                      <ChevronLeft className="w-4 h-4 text-slate-600" />
+                      <span>← Retour aux produits</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        onAddToCart(product, qty, selectedSize, selectedColor);
+                        onClose();
+                      }}
+                      className="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-950 font-bold py-3.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-xs border border-emerald-200"
+                    >
+                      <ShoppingBag className="w-4 h-4 text-emerald-800" />
+                      <span>Ajouter au Panier</span>
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        onBuyNow(product.id, qty);
+                        onClose();
+                      }}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-md shadow-emerald-600/10"
+                    >
+                      <span>Acheter Immédiatement</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (

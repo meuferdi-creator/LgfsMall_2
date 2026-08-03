@@ -1,0 +1,293 @@
+import React, { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
+import { PasswordInput } from "./PasswordInput";
+import { ArrowRight, User as UserIcon, XCircle, CheckCircle2, Lock, ShoppingBag, ShieldCheck } from "lucide-react";
+import { UserRole } from "../types";
+import { translations, SupportedLanguage } from "../translations";
+
+interface AuthModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  lang: SupportedLanguage;
+  isLoading: boolean;
+  error: string | null;
+  successMessage: string | null;
+  clearMessages: () => void;
+  login: (email: string, pass: string) => Promise<boolean>;
+  register: (data: any) => Promise<boolean>;
+  onGoogleSignIn: () => void;
+  onOpenResetPassword: () => void;
+  pendingPurchase?: { productId: string; quantity: number } | null;
+}
+
+export default function AuthModal({
+  isOpen,
+  onClose,
+  lang,
+  isLoading,
+  error,
+  successMessage,
+  clearMessages,
+  login,
+  register,
+  onGoogleSignIn,
+  onOpenResetPassword,
+  pendingPurchase
+}: AuthModalProps) {
+  const t = translations[lang] || translations.FR;
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+
+  // Login form state
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  // Register form state
+  const [regName, setRegName] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regPhone, setRegPhone] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regRole, setRegRole] = useState<UserRole>("BUYER");
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const ok = await login(email, password);
+    if (ok) {
+      setEmail("");
+      setPassword("");
+      onClose();
+    }
+  };
+
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const ok = await register({
+      name: regName,
+      email: regEmail,
+      phone: regPhone,
+      password: regPassword,
+      role: regRole
+    });
+    if (ok) {
+      setRegName("");
+      setRegEmail("");
+      setRegPhone("");
+      setRegPassword("");
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md bg-white dark:bg-emerald-950 text-slate-900 dark:text-white rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-emerald-800 shadow-2xl">
+        <DialogHeader className="space-y-1 text-center">
+          <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center font-bold mb-2">
+            <Lock className="w-6 h-6" />
+          </div>
+          <DialogTitle className="text-xl font-black font-display text-emerald-950 dark:text-white">
+            {authMode === "login" ? "Connexion LGF's Mall" : "Créer un compte LGF"}
+          </DialogTitle>
+          <DialogDescription className="text-xs text-slate-500 dark:text-emerald-300">
+            {pendingPurchase 
+              ? "Veuillez vous connecter pour finaliser votre achat en Séquestre LGF."
+              : "Accédez à votre espace sécurisé, vos commandes et vos soldes Mobile Money."}
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Global error or success messages */}
+        {error && (
+          <div className="bg-rose-50 border-l-4 border-rose-500 text-rose-900 p-3 rounded-r-xl flex items-start space-x-2 text-xs font-semibold my-2">
+            <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+            <span className="flex-1">{error}</span>
+            <button onClick={clearMessages} className="text-rose-400 hover:text-rose-600">✕</button>
+          </div>
+        )}
+
+        {/* Tab Selector */}
+        <div className="flex border-b border-slate-200 dark:border-emerald-800 my-4">
+          <button
+            onClick={() => { setAuthMode("login"); clearMessages(); }}
+            className={`flex-1 pb-3 text-center text-xs font-bold border-b-2 transition-all cursor-pointer ${
+              authMode === "login"
+                ? "border-emerald-600 text-emerald-700 dark:text-emerald-400 font-extrabold"
+                : "border-transparent text-slate-400 hover:text-slate-600"
+            }`}
+          >
+            Se Connecter
+          </button>
+          <button
+            onClick={() => { setAuthMode("register"); clearMessages(); }}
+            className={`flex-1 pb-3 text-center text-xs font-bold border-b-2 transition-all cursor-pointer ${
+              authMode === "register"
+                ? "border-emerald-600 text-emerald-700 dark:text-emerald-400 font-extrabold"
+                : "border-transparent text-slate-400 hover:text-slate-600"
+            }`}
+          >
+            Créer un Compte
+          </button>
+        </div>
+
+        {/* LOGIN FORM */}
+        {authMode === "login" ? (
+          <form onSubmit={handleLoginSubmit} className="space-y-4">
+            <div>
+              <label className="text-[10px] uppercase font-bold tracking-wider text-slate-700 dark:text-emerald-300 mb-1 block">
+                Adresse Email *
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="nom@exemple.tg"
+                className="w-full bg-slate-50 dark:bg-emerald-900/40 border border-slate-200 dark:border-emerald-700 px-3.5 py-2.5 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <PasswordInput
+                label="Mot de passe"
+                requiredStar
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+              <div className="flex items-center justify-end text-xs mt-1">
+                <button
+                  type="button"
+                  onClick={() => { onClose(); onOpenResetPassword(); }}
+                  className="text-emerald-600 font-bold hover:underline text-[11px]"
+                >
+                  Mot de passe oublié ?
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl shadow-md transition-all flex items-center justify-center space-x-2 cursor-pointer text-xs"
+            >
+              {isLoading ? (
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+              ) : (
+                <>
+                  <span>Se Connecter</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-slate-200 dark:border-emerald-800"></div>
+              <span className="flex-shrink mx-3 text-[9px] text-slate-400 dark:text-emerald-500 font-mono font-bold uppercase">OU</span>
+              <div className="flex-grow border-t border-slate-200 dark:border-emerald-800"></div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onGoogleSignIn}
+              className="w-full bg-white dark:bg-emerald-900 text-slate-800 dark:text-white border border-slate-200 dark:border-emerald-700 font-bold py-2.5 px-4 rounded-xl flex items-center justify-center space-x-2 text-xs transition-all hover:bg-slate-50 cursor-pointer"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+              </svg>
+              <span>Continuer avec Google</span>
+            </button>
+          </form>
+        ) : (
+
+          /* REGISTER FORM */
+          <form onSubmit={handleRegisterSubmit} className="space-y-3">
+            <div>
+              <label className="text-[10px] uppercase font-bold tracking-wider text-slate-700 dark:text-emerald-300 mb-1 block">
+                Nom Complet / Entreprise *
+              </label>
+              <input
+                type="text"
+                required
+                value={regName}
+                onChange={(e) => setRegName(e.target.value)}
+                placeholder="Koffi Mensah"
+                className="w-full bg-slate-50 dark:bg-emerald-900/40 border border-slate-200 dark:border-emerald-700 px-3.5 py-2 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] uppercase font-bold tracking-wider text-slate-700 dark:text-emerald-300 mb-1 block">
+                Adresse Email *
+              </label>
+              <input
+                type="email"
+                required
+                value={regEmail}
+                onChange={(e) => setRegEmail(e.target.value)}
+                placeholder="nom@exemple.tg"
+                className="w-full bg-slate-50 dark:bg-emerald-900/40 border border-slate-200 dark:border-emerald-700 px-3.5 py-2 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] uppercase font-bold tracking-wider text-slate-700 dark:text-emerald-300 mb-1 block">
+                Téléphone Mobile Money
+              </label>
+              <input
+                type="text"
+                value={regPhone}
+                onChange={(e) => setRegPhone(e.target.value)}
+                placeholder="+228 90 00 00 00"
+                className="w-full bg-slate-50 dark:bg-emerald-900/40 border border-slate-200 dark:border-emerald-700 px-3.5 py-2 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] uppercase font-bold tracking-wider text-slate-700 dark:text-emerald-300 mb-1 block">
+                Profil / Rôle *
+              </label>
+              <select
+                value={regRole}
+                onChange={(e) => setRegRole(e.target.value as UserRole)}
+                className="w-full bg-slate-50 dark:bg-emerald-900/40 border border-slate-200 dark:border-emerald-700 px-3.5 py-2 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 dark:text-white cursor-pointer"
+              >
+                <option value="BUYER">Acheteur Client</option>
+                <option value="VENDOR">Vendeur Marchand</option>
+                <option value="DRIVER">Livreur / Transporteur</option>
+                <option value="INVESTOR">Investisseur LGF</option>
+              </select>
+            </div>
+
+            <div>
+              <PasswordInput
+                label="Mot de passe"
+                requiredStar
+                required
+                value={regPassword}
+                onChange={(e) => setRegPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl shadow-md transition-all flex items-center justify-center space-x-2 cursor-pointer text-xs mt-2"
+            >
+              {isLoading ? (
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+              ) : (
+                <>
+                  <span>Créer Mon Compte</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </form>
+        )}
+
+      </DialogContent>
+    </Dialog>
+  );
+}

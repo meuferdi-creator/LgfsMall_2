@@ -94,10 +94,10 @@ export default function ProductCard({
   return (
     <div
       id={`product-card-${product.id}`}
-      className={`bg-white rounded-3xl border transition-all duration-300 overflow-hidden flex flex-col justify-between group h-full ${
+      className={`bg-white dark:bg-emerald-950/90 rounded-3xl border transition-all duration-300 overflow-hidden flex flex-col justify-between group h-full ${
         isWholesaleActive
-          ? "border-amber-400 shadow-amber-100/40 shadow-xl ring-2 ring-amber-400/20"
-          : "border-emerald-100/50 shadow-md hover:shadow-xl"
+          ? "border-amber-400 dark:border-amber-500 shadow-amber-100/40 dark:shadow-amber-950/30 shadow-xl ring-2 ring-amber-400/20"
+          : "border-emerald-100/60 dark:border-emerald-800/60 shadow-md hover:shadow-xl"
       }`}
     >
       <div 
@@ -105,7 +105,7 @@ export default function ProductCard({
         className={onOpenDetail ? "cursor-pointer" : ""}
       >
         {/* Product Image & Badge Overlay */}
-        <div className="relative aspect-video bg-emerald-50/30 overflow-hidden">
+        <div className="relative aspect-video bg-emerald-50/30 dark:bg-emerald-900/40 overflow-hidden">
           <img
             src={activeImage}
             alt={product.title}
@@ -134,7 +134,7 @@ export default function ProductCard({
           )}
           
           {/* Category Badge */}
-          <span className="absolute top-3 left-3 bg-emerald-600/95 backdrop-blur-md text-white font-mono text-[9px] font-bold px-2.5 py-1 rounded-lg uppercase tracking-wider">
+          <span className="absolute top-3 left-3 bg-emerald-600/95 dark:bg-emerald-700/95 backdrop-blur-md text-white font-mono text-[9px] font-bold px-2.5 py-1 rounded-lg uppercase tracking-wider">
             {product.category}
           </span>
 
@@ -148,7 +148,7 @@ export default function ProductCard({
               className={`p-1.5 rounded-full backdrop-blur-md shadow-md transition-all transform active:scale-125 cursor-pointer ${
                 isFavorite
                   ? "bg-rose-500 text-white hover:bg-rose-600"
-                  : "bg-white/80 hover:bg-white text-slate-600 hover:text-rose-500"
+                  : "bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-200 hover:text-rose-500"
               }`}
               title={isFavorite ? "Retirer de mes favoris" : "Ajouter à mes favoris"}
             >
@@ -188,34 +188,34 @@ export default function ProductCard({
         {/* Card Body */}
         <div className="p-6 space-y-4">
           <div>
-            <h4 className="font-extrabold text-sm text-emerald-950 leading-tight group-hover:text-emerald-600 transition-colors">
+            <h4 className="font-extrabold text-sm text-emerald-950 dark:text-white leading-tight group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors font-display">
               {product.title}
             </h4>
-            <p className="text-xs text-emerald-800 line-clamp-2 leading-relaxed mt-1">
+            <p className="text-xs text-emerald-800 dark:text-emerald-200/90 line-clamp-2 leading-relaxed mt-1">
               {product.description}
             </p>
           </div>
 
           {/* Pricing Stats Grid */}
-          <div className="p-3.5 bg-emerald-50/40 rounded-2xl border border-emerald-100/40 grid grid-cols-2 gap-2 text-xs">
+          <div className="p-3.5 bg-emerald-50/50 dark:bg-emerald-900/50 rounded-2xl border border-emerald-100/50 dark:border-emerald-800/60 grid grid-cols-2 gap-2 text-xs">
             <div>
-              <span className="text-[9px] font-bold text-emerald-500 uppercase font-mono block">Prix de Détail :</span>
-              <span className={`font-extrabold text-sm block ${isWholesaleActive ? "line-through text-slate-400" : "text-emerald-950"}`}>
+              <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase font-mono block">Prix de Détail :</span>
+              <span className={`font-extrabold text-sm block ${isWholesaleActive ? "line-through text-slate-400 dark:text-slate-500" : "text-emerald-950 dark:text-white"}`}>
                 {formatCurrency(product.price)}
               </span>
             </div>
             {hasWholesale ? (
               <div>
-                <span className="text-[9px] font-bold text-amber-600 uppercase font-mono block">Prix de Gros :</span>
-                <span className={`font-extrabold text-sm block ${isWholesaleActive ? "text-amber-600 font-black text-base" : "text-slate-500"}`}>
+                <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 uppercase font-mono block">Prix de Gros :</span>
+                <span className={`font-extrabold text-sm block ${isWholesaleActive ? "text-amber-600 dark:text-amber-400 font-black text-base" : "text-slate-500 dark:text-slate-400"}`}>
                   {formatCurrency(wholesalePrice)}
                 </span>
-                <span className="text-[8px] text-amber-600 block font-bold uppercase mt-0.5">Dès {wholesaleMin} pièces</span>
+                <span className="text-[8px] text-amber-600 dark:text-amber-400 block font-bold uppercase mt-0.5">Dès {wholesaleMin} pièces</span>
               </div>
             ) : (
               <div>
-                <span className="text-[9px] font-bold text-emerald-500 uppercase font-mono block">Vendeur vérifié :</span>
-                <span className="font-semibold text-[10px] text-emerald-900 truncate block mt-0.5">
+                <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase font-mono block">Vendeur vérifié :</span>
+                <span className="font-semibold text-[10px] text-emerald-900 dark:text-emerald-200 truncate block mt-0.5">
                   {product.vendor?.name || "Boutique d'Assigamé"}
                 </span>
               </div>
@@ -227,14 +227,14 @@ export default function ProductCard({
             <div className="space-y-3 pt-1">
               {/* Dynamic quantity select and summary */}
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] font-bold text-emerald-700 uppercase font-mono">Simuler la quantité :</span>
+                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase font-mono">Simuler la quantité :</span>
                 <div className="flex items-center space-x-1">
                   <button
                     type="button"
                     onClick={handleDecrement}
                     disabled={qty <= 1}
                     aria-label="Diminuer la quantité"
-                    className="w-7 h-7 bg-emerald-50 border border-emerald-100 text-emerald-950 rounded-lg flex items-center justify-center font-bold text-xs hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
+                    className="w-7 h-7 bg-emerald-50 dark:bg-emerald-900 border border-emerald-100 dark:border-emerald-700 text-emerald-950 dark:text-white rounded-lg flex items-center justify-center font-bold text-xs hover:bg-emerald-100 dark:hover:bg-emerald-800 disabled:opacity-50 cursor-pointer"
                   >
                     -
                   </button>
@@ -245,14 +245,14 @@ export default function ProductCard({
                     min={1}
                     max={product.stock}
                     aria-label="Quantité souhaitée"
-                    className="w-10 h-7 bg-emerald-50 border border-emerald-100 text-emerald-950 rounded-lg text-center text-xs font-bold"
+                    className="w-10 h-7 bg-emerald-50 dark:bg-emerald-900 border border-emerald-100 dark:border-emerald-700 text-emerald-950 dark:text-white rounded-lg text-center text-xs font-bold"
                   />
                   <button
                     type="button"
                     onClick={handleIncrement}
                     disabled={qty >= product.stock}
                     aria-label="Augmenter la quantité"
-                    className="w-7 h-7 bg-emerald-50 border border-emerald-100 text-emerald-950 rounded-lg flex items-center justify-center font-bold text-xs hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
+                    className="w-7 h-7 bg-emerald-50 dark:bg-emerald-900 border border-emerald-100 dark:border-emerald-700 text-emerald-950 dark:text-white rounded-lg flex items-center justify-center font-bold text-xs hover:bg-emerald-100 dark:hover:bg-emerald-800 disabled:opacity-50 cursor-pointer"
                   >
                     +
                   </button>
@@ -262,7 +262,7 @@ export default function ProductCard({
               {/* Real-time Dynamic bulk savings bar */}
               {hasWholesale && (
                 <div className="space-y-1.5">
-                  <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/50">
+                  <div className="w-full bg-slate-100 dark:bg-emerald-900/80 rounded-full h-2 overflow-hidden border border-slate-200/50 dark:border-emerald-800">
                     <div
                       className={`h-full transition-all duration-500 rounded-full ${
                         isWholesaleActive
@@ -275,15 +275,15 @@ export default function ProductCard({
                   
                   <div className="flex justify-between items-center text-[9px] font-semibold">
                     {isWholesaleActive ? (
-                      <span className="text-amber-600 font-extrabold flex items-center">
+                      <span className="text-amber-600 dark:text-amber-400 font-extrabold flex items-center">
                         🔥 ÉCONOMIE DU GROS DE {formatCurrency(totalSavings)} !
                       </span>
                     ) : (
-                      <span className="text-emerald-700">
-                        Ajoutez <strong className="text-amber-600 font-bold">{wholesaleMin - qty} pièces</strong> pour le prix de gros !
+                      <span className="text-emerald-700 dark:text-emerald-300">
+                        Ajoutez <strong className="text-amber-600 dark:text-amber-400 font-bold">{wholesaleMin - qty} pièces</strong> pour le prix de gros !
                       </span>
                     )}
-                    <span className="text-emerald-500 font-mono">
+                    <span className="text-emerald-600 dark:text-emerald-400 font-mono">
                       {qty}/{wholesaleMin} psc
                     </span>
                   </div>
@@ -295,16 +295,16 @@ export default function ProductCard({
       </div>
 
       {/* Action Footer */}
-      <div className="p-6 pt-0 border-t border-emerald-50/50 mt-auto bg-emerald-50/20">
-        <div className="flex justify-between items-end mb-4">
+      <div className="p-6 pt-0 border-t border-emerald-50/50 dark:border-emerald-800/40 mt-auto bg-emerald-50/20 dark:bg-emerald-900/20">
+        <div className="flex justify-between items-end mb-4 pt-3">
           <div>
-            <span className="text-[8px] font-bold text-emerald-500 uppercase block font-mono">Total Estimé :</span>
-            <span className="font-extrabold text-emerald-950 text-base leading-none">
+            <span className="text-[8px] font-bold text-emerald-600 dark:text-emerald-400 uppercase block font-mono">Total Estimé :</span>
+            <span className="font-extrabold text-emerald-950 dark:text-white text-base leading-none">
               {formatCurrency(totalPrice)}
             </span>
           </div>
           {isWholesaleActive && (
-            <span className="bg-amber-100 text-amber-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-md border border-amber-200">
+            <span className="bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 text-[8px] font-extrabold px-1.5 py-0.5 rounded-md border border-amber-200 dark:border-amber-700">
               Gros appliqué
             </span>
           )}
