@@ -113,7 +113,7 @@ export default function LgfFooter({
                 </p>
                 <p className="flex items-center space-x-2">
                   <Mail className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
-                  <a href="mailto:arriveramegne@gmail.com" className="hover:text-emerald-700 dark:hover:text-amber-300 font-semibold">arriveramegne@gmail.com</a>
+                  <a href="mailto:lgfmall.lmd11@gmail.com" className="hover:text-emerald-700 dark:hover:text-amber-300 font-semibold">lgfmall.lmd11@gmail.com</a>
                 </p>
               </div>
 

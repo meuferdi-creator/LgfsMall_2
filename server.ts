@@ -101,18 +101,18 @@ async function seedDatabase() {
     const hashedPassword = bcryptjs.hashSync("LgfMall2026!", 10);
 
     // 1. Seed Admin User
-    let admin = await prisma.user.findUnique({ where: { email: "arriveramegne@gmail.com" } });
+    let admin = await prisma.user.findUnique({ where: { email: "lgfmall.lmd11@gmail.com" } });
     if (!admin) {
       admin = await prisma.user.create({
         data: {
-          email: "arriveramegne@gmail.com",
+          email: "lgfmall.lmd11@gmail.com",
           name: "LGF Admin (Arrive Ramegne)",
           password: hashedPassword,
           phone: "+228 72998148",
           role: "ADMIN"
         }
       });
-      console.log("Admin seeded: arriveramegne@gmail.com");
+      console.log("Admin seeded: lgfmall.lmd11@gmail.com");
     }
 
     // 2. Seed Single Official Boutique Vendor
