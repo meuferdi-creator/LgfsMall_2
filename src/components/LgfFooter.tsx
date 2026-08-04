@@ -27,7 +27,7 @@ export default function LgfFooter({
   const isDark = theme === "dark";
 
   return (
-    <footer className={`w-full transition-colors duration-200 ${
+    <footer id="lgf-footer" className={`lgf-footer high-contrast-fix w-full transition-colors duration-200 ${
       isDark ? "bg-emerald-950 text-slate-200 border-t border-emerald-900" : "bg-white text-slate-700 border-t border-slate-200/80"
     }`}>
       {/* TRUST BADGES ROW (MATCHES SCREENSHOT) */}
@@ -113,7 +113,7 @@ export default function LgfFooter({
                 </p>
                 <p className="flex items-center space-x-2">
                   <Mail className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
-                  <a href="mailto:arriveramegne@gmail.com" className="hover:text-emerald-700 dark:hover:text-amber-300 font-semibold">arriveramegne@gmail.com</a>
+                  <a href="mailto:lgfmall.lmd11@gmail.com" className="hover:text-emerald-700 dark:hover:text-amber-300 font-semibold">lgfmall.lmd11@gmail.com</a>
                 </p>
               </div>
 

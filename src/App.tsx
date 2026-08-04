@@ -1,12 +1,33 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, lazy, Suspense } from "react";
 import { useAppStore } from "./store";
 import { translations, SupportedLanguage } from "./translations";
 import { UserRole } from "./types";
-import BuyerPortal from "./components/BuyerPortal";
-import VendorPortal from "./components/VendorPortal";
-import InvestorPortal from "./components/InvestorPortal";
-import DriverPortal from "./components/DriverPortal";
-import AdminPortal from "./components/AdminPortal";
+
+// Lazy load Portal components to optimize bundle size and load performance
+const BuyerPortal = lazy(() => import("./components/BuyerPortal"));
+const VendorPortal = lazy(() => import("./components/VendorPortal"));
+const InvestorPortal = lazy(() => import("./components/InvestorPortal"));
+const DriverPortal = lazy(() => import("./components/DriverPortal"));
+const AdminPortal = lazy(() => import("./components/AdminPortal"));
+
+function PortalSkeleton() {
+  return (
+    <div className="p-8 space-y-6 animate-pulse bg-white dark:bg-emerald-900/40 rounded-3xl border border-slate-200 dark:border-emerald-800/60 my-6 shadow-sm">
+      <div className="flex items-center space-x-4">
+        <div className="w-12 h-12 bg-emerald-200 dark:bg-emerald-800 rounded-2xl"></div>
+        <div className="space-y-2 flex-1">
+          <div className="h-4 bg-emerald-200 dark:bg-emerald-800 rounded w-1/3"></div>
+          <div className="h-3 bg-emerald-100 dark:bg-emerald-800/60 rounded w-1/2"></div>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+        <div className="h-28 bg-slate-100 dark:bg-emerald-900/60 rounded-2xl border border-slate-200 dark:border-emerald-800/40"></div>
+        <div className="h-28 bg-slate-100 dark:bg-emerald-900/60 rounded-2xl border border-slate-200 dark:border-emerald-800/40"></div>
+        <div className="h-28 bg-slate-100 dark:bg-emerald-900/60 rounded-2xl border border-slate-200 dark:border-emerald-800/40"></div>
+      </div>
+    </div>
+  );
+}
 import SeoStructuredData from "./components/SeoStructuredData";
 import LiveCommerce from "./components/LiveCommerce";
 import ProductCard from "./components/ProductCard";
@@ -20,7 +41,7 @@ import FlashDealsSection from "./components/FlashDealsSection";
 import AuthModal from "./components/AuthModal";
 import TrackOrderModal from "./components/TrackOrderModal";
 import LgfFooter from "./components/LgfFooter";
-import { executeGoogleSignIn, isFirebaseConfigured } from "./lib/firebase";
+import { executeGoogleSignIn, isFirebaseConfigured, auth } from "./lib/firebase";
 import { 
   ShoppingBag, 
   ShieldCheck, 
@@ -33,6 +54,8 @@ import {
   Globe, 
   Phone, 
   ArrowRight, 
+  ArrowLeft,
+  X,
   Coins, 
   Truck, 
   TrendingUp, 
@@ -194,6 +217,7 @@ export default function App() {
 
   const handleGoogleSignInClick = async () => {
     try {
+      setIsAuthModalOpen(false); // Close auth modal immediately so user isn't forced to close it
       const result = await executeGoogleSignIn((onSelect) => {
         setGoogleSelectorCallback(() => (selectedUser: any) => {
           setShowGoogleSelector(false);
@@ -203,17 +227,21 @@ export default function App() {
         setShowGoogleSelector(true);
       });
       
-      const success = await loginWithGoogle({
-        email: result.email,
-        name: result.name,
-        uid: result.uid,
-        role: (result as any).role || "BUYER",
-      });
-      
-      if (success) {
-        setGoogleCustomEmail("");
-        setGoogleCustomName("");
-        window.scrollTo({ top: 0, behavior: "smooth" });
+      if (result) {
+        const success = await loginWithGoogle({
+          email: result.email,
+          name: result.name,
+          uid: result.uid,
+          role: (result as any).role || "BUYER",
+        });
+        
+        if (success) {
+          setIsAuthModalOpen(false);
+          setShowGoogleSelector(false);
+          setGoogleCustomEmail("");
+          setGoogleCustomName("");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
       }
     } catch (e: any) {
       console.error("Google Sign-In integration error:", e);
@@ -266,6 +294,39 @@ export default function App() {
 
   // Get localized strings
   const t = translations[lang] || translations.FR;
+
+  // Handle redirect result on app load for Google Sign-In
+  useEffect(() => {
+    const handleRedirectResult = async () => {
+      if (auth && isFirebaseConfigured) {
+        try {
+          const { getRedirectResult } = await import("firebase/auth");
+          const result = await getRedirectResult(auth);
+          if (result && result.user) {
+            const user = result.user;
+            const idToken = await user.getIdToken();
+            
+            const success = await loginWithGoogle({
+              email: user.email || "",
+              name: user.displayName || user.email?.split("@")[0] || "Utilisateur Google",
+              uid: user.uid,
+              role: "BUYER",
+            });
+            
+            if (success) {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }
+          }
+        } catch (error: any) {
+          if (!error?.message?.includes("no redirect data")) {
+            console.warn("Redirect result handling error:", error);
+          }
+        }
+      }
+    };
+    
+    handleRedirectResult();
+  }, []);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -746,83 +807,85 @@ export default function App() {
                 )}
 
                 {/* 2. DYNAMIC WORKSPACE PORTALS RENDER */}
-                {(() => {
-                  const activeRole = user.role === "ADMIN" ? sandboxRole : user.role;
-                  
-                  if (activeRole === "BUYER") {
-                    return (
-                      <BuyerPortal
-                        products={products}
-                        buyerOrders={buyerOrders}
-                        placeOrder={placeOrder}
-                        confirmOrderDelivery={confirmOrderDelivery}
-                        fetchStats={fetchStats}
-                        formatCurrency={formatCurrency}
-                        isLoading={isLoading}
-                        initialProductId={pendingPurchase?.productId}
-                        initialQuantity={pendingPurchase?.quantity}
-                        initialTab={pendingPurchase ? "order" : undefined}
-                      />
-                    );
-                  }
-                  
-                  if (activeRole === "VENDOR") {
-                    return (
-                      <VendorPortal
-                        user={user}
-                        vendorProducts={vendorProducts}
-                        vendorOrders={vendorOrders}
-                        createProduct={createProduct}
-                        updateProduct={updateProduct}
-                        deleteProduct={deleteProduct}
-                        withdrawEscrowFunds={withdrawEscrowFunds}
-                        fetchStats={fetchStats}
-                        formatCurrency={formatCurrency}
-                        isLoading={isLoading}
-                        fetchVendorOrders={fetchVendorOrders}
-                      />
-                    );
-                  }
-                  
-                  if (activeRole === "INVESTOR") {
-                    return (
-                      <InvestorPortal
-                        investments={investments}
-                        createInvestment={createInvestment}
-                        fetchStats={fetchStats}
-                        formatCurrency={formatCurrency}
-                        isLoading={isLoading}
-                      />
-                    );
-                  }
+                <Suspense fallback={<PortalSkeleton />}>
+                  {(() => {
+                    const activeRole = user.role === "ADMIN" ? sandboxRole : user.role;
+                    
+                    if (activeRole === "BUYER") {
+                      return (
+                        <BuyerPortal
+                          products={products}
+                          buyerOrders={buyerOrders}
+                          placeOrder={placeOrder}
+                          confirmOrderDelivery={confirmOrderDelivery}
+                          fetchStats={fetchStats}
+                          formatCurrency={formatCurrency}
+                          isLoading={isLoading}
+                          initialProductId={pendingPurchase?.productId}
+                          initialQuantity={pendingPurchase?.quantity}
+                          initialTab={pendingPurchase ? "order" : undefined}
+                        />
+                      );
+                    }
+                    
+                    if (activeRole === "VENDOR") {
+                      return (
+                        <VendorPortal
+                          user={user}
+                          vendorProducts={vendorProducts}
+                          vendorOrders={vendorOrders}
+                          createProduct={createProduct}
+                          updateProduct={updateProduct}
+                          deleteProduct={deleteProduct}
+                          withdrawEscrowFunds={withdrawEscrowFunds}
+                          fetchStats={fetchStats}
+                          formatCurrency={formatCurrency}
+                          isLoading={isLoading}
+                          fetchVendorOrders={fetchVendorOrders}
+                        />
+                      );
+                    }
+                    
+                    if (activeRole === "INVESTOR") {
+                      return (
+                        <InvestorPortal
+                          investments={investments}
+                          createInvestment={createInvestment}
+                          fetchStats={fetchStats}
+                          formatCurrency={formatCurrency}
+                          isLoading={isLoading}
+                        />
+                      );
+                    }
 
-                  if (activeRole === "DRIVER") {
-                    return (
-                      <DriverPortal
-                        user={user}
-                        formatCurrency={formatCurrency}
-                        isLoading={isLoading}
-                      />
-                    );
-                  }
+                    if (activeRole === "DRIVER") {
+                      return (
+                        <DriverPortal
+                          user={user}
+                          formatCurrency={formatCurrency}
+                          isLoading={isLoading}
+                        />
+                      );
+                    }
 
-                  // Admin View
-                  if (activeRole === "ADMIN") {
-                    return (
-                      <AdminPortal
-                        allUsers={allUsers}
-                        pendingKycs={pendingKycs}
-                        verifyKyc={verifyKyc}
-                        formatCurrency={formatCurrency}
-                        isLoading={isLoading}
-                        rejectionReasons={rejectionReasons}
-                        setRejectionReasons={setRejectionReasons}
-                      />
-                    );
-                  }
+                    // Admin View
+                    if (activeRole === "ADMIN") {
+                      return (
+                        <AdminPortal
+                          allUsers={allUsers}
+                          pendingKycs={pendingKycs}
+                          verifyKyc={verifyKyc}
+                          formatCurrency={formatCurrency}
+                          isLoading={isLoading}
+                          rejectionReasons={rejectionReasons}
+                          setRejectionReasons={setRejectionReasons}
+                        />
+                      );
+                    }
 
-                  return null;
-                })()}
+                    return null;
+                  })()}
+                </Suspense>
 
               </div>
 
@@ -963,16 +1026,36 @@ export default function App() {
           <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden border border-emerald-100 shadow-2xl flex flex-col my-8 animate-scale-in text-slate-800">
             {/* Modal Header */}
             <div className="bg-emerald-950 text-white p-6 text-center relative border-b border-emerald-900">
+              {/* Back button */}
               <button 
+                type="button"
                 onClick={() => {
                   setShowGoogleSelector(false);
                   setGoogleSelectorCallback(null);
+                  setIsAuthModalOpen(true);
                 }}
-                className="absolute top-4 right-4 text-emerald-300 hover:text-white font-mono text-sm"
+                className="absolute top-4 left-4 px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-emerald-200 hover:text-white transition-all flex items-center space-x-1 text-xs font-bold cursor-pointer border border-white/10 shadow-sm"
+                title="Retour à la connexion"
               >
-                ✕
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Retour</span>
               </button>
-              <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-3">
+
+              {/* Close button (Tab / Croix) */}
+              <button 
+                type="button"
+                onClick={() => {
+                  setShowGoogleSelector(false);
+                  setGoogleSelectorCallback(null);
+                  setIsAuthModalOpen(false);
+                }}
+                className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-rose-500/80 text-emerald-200 hover:text-white transition-all flex items-center justify-center cursor-pointer border border-white/10 shadow-sm"
+                title="Fermer la fenêtre"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-3 mt-2">
                 <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#FFFFFF"/>
                 </svg>
@@ -1104,6 +1187,22 @@ export default function App() {
                     <span>Simuler Google Sign-In</span>
                   </button>
                 </div>
+              </div>
+
+              {/* Bottom return action */}
+              <div className="pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGoogleSelector(false);
+                    setGoogleSelectorCallback(null);
+                    setIsAuthModalOpen(true);
+                  }}
+                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Retour au formulaire de connexion</span>
+                </button>
               </div>
             </div>
 

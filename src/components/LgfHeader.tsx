@@ -102,7 +102,7 @@ export default function LgfHeader({
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white dark:bg-emerald-950 border-b border-slate-200 dark:border-emerald-800/60 shadow-md">
+    <header id="lgf-header" className="lgf-header sticky top-0 z-40 bg-white dark:bg-emerald-950 border-b border-slate-200 dark:border-emerald-800/60 shadow-md">
       
       {/* 1. TOP ANNOUNCEMENT TICKER BAR (Scrolling Marquee Ticker) */}
       <div className="bg-amber-500 text-emerald-950 px-4 py-1.5 text-xs font-semibold flex items-center justify-between border-b border-amber-600/20 overflow-hidden relative select-none">

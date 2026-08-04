@@ -3,12 +3,14 @@ import { logger } from "./logger";
 import { 
   getAuth, 
   GoogleAuthProvider, 
-  signInWithPopup, 
+  signInWithPopup,
   User as FirebaseUser,
   Auth,
   browserLocalPersistence,
   setPersistence,
-  onAuthStateChanged
+  onAuthStateChanged,
+  getRedirectResult,
+  signInWithRedirect
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -108,23 +110,24 @@ export async function executeGoogleSignIn(onShowSimulatedSelector: (onSelect: (u
       provider.addScope("profile");
       provider.addScope("email");
       const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      const idToken = await user.getIdToken();
-      
-      return {
-        email: user.email || "",
-        name: user.displayName || user.email?.split("@")[0] || "Utilisateur Google",
-        photoURL: user.photoURL || undefined,
-        uid: user.uid,
-        idToken,
-      };
+      if (result && result.user) {
+        const user = result.user;
+        const idToken = await user.getIdToken();
+        
+        return {
+          email: user.email || "",
+          name: user.displayName || user.email?.split("@")[0] || "Utilisateur Google",
+          photoURL: user.photoURL || undefined,
+          uid: user.uid,
+          idToken,
+        };
+      }
     } catch (error: any) {
-      console.warn("Firebase auth popup failed, falling back to simulator:", error);
-      // If popup fails (e.g. blocked), proceed to simulated fallback so the user doesn't get stuck
+      console.warn("Firebase auth popup failed or blocked, falling back to in-app Google selector:", error);
     }
   }
 
-  // Simulated google auth fallback for iframe environments and local runs
+  // In-app Google auth selector for iframe preview & smooth direct navigation
   return new Promise<GoogleSignInResult>((resolve) => {
     onShowSimulatedSelector((selectedUser) => {
       resolve(selectedUser);

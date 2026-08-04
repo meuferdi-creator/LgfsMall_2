@@ -91,7 +91,7 @@ export default function HomePageSections({
   const trendingProducts = products.slice(0, 6);
 
   return (
-    <div className="space-y-12 my-8">
+    <div className="high-contrast-fix space-y-12 my-8">
       
       {/* 1. ACHETER PAR CATÉGORIE GRID */}
       <section className="space-y-6">

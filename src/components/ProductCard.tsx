@@ -94,7 +94,7 @@ export default function ProductCard({
   return (
     <div
       id={`product-card-${product.id}`}
-      className={`bg-white dark:bg-emerald-950/90 rounded-3xl border transition-all duration-300 overflow-hidden flex flex-col justify-between group h-full ${
+      className={`high-contrast-fix bg-white dark:bg-emerald-950/90 rounded-3xl border transition-all duration-300 overflow-hidden flex flex-col justify-between group h-full ${
         isWholesaleActive
           ? "border-amber-400 dark:border-amber-500 shadow-amber-100/40 dark:shadow-amber-950/30 shadow-xl ring-2 ring-amber-400/20"
           : "border-emerald-100/60 dark:border-emerald-800/60 shadow-md hover:shadow-xl"

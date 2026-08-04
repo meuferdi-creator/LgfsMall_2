@@ -23,33 +23,59 @@
   color: #f0fdf4;
 }
 
-/* Scope dark mode text contrast rules specifically to main content, sections and footer, leaving header isolated */
-.dark main h1, .dark main h2, .dark main h3, .dark main h4,
-.dark section h1, .dark section h2, .dark section h3, .dark section h4,
-.dark footer h1, .dark footer h2, .dark footer h3, .dark footer h4,
-.dark footer h5, .dark footer h6 {
+/* 
+  STRICT ISOLATION OF CONTRAST / READABILITY OVERRIDES:
+  Scope dark mode readability rules to 'main' and 'footer', explicitly excluding '#lgf-header' / '.lgf-header'.
+  Header retains its original intact styling without interference.
+*/
+
+.dark body:not(#lgf-header) main h1,
+.dark body:not(#lgf-header) main h2,
+.dark body:not(#lgf-header) main h3,
+.dark body:not(#lgf-header) main h4,
+.dark body:not(#lgf-header) footer h1,
+.dark body:not(#lgf-header) footer h2,
+.dark body:not(#lgf-header) footer h3,
+.dark body:not(#lgf-header) footer h4,
+.dark body:not(#lgf-header) footer h5,
+.dark body:not(#lgf-header) footer h6 {
   color: #ffffff;
 }
 
-.dark main .text-slate-500,
-.dark section .text-slate-500,
-.dark footer .text-slate-500,
-.dark main .text-slate-600,
-.dark section .text-slate-600,
-.dark footer .text-slate-600 {
-  color: #a7f3d0; /* emerald-200 for crisp, clear readability */
+/* 
+  CUSTOM CLASS: .high-contrast-fix
+  Harmonizes dark mode text contrast in specific non-header sections:
+  - Flash Deals Section (#flash-deals-section)
+  - Home Page Sections (#categories-section, #bestsellers-section, #new-arrivals-section, #shops-section, #trust-badges-section)
+  - Product Cards
+  - Footer
+*/
+.dark .high-contrast-fix h1,
+.dark .high-contrast-fix h2,
+.dark .high-contrast-fix h3,
+.dark .high-contrast-fix h4,
+.dark .high-contrast-fix h5,
+.dark .high-contrast-fix h6 {
+  color: #ffffff !important;
 }
 
-.dark main .text-slate-400,
-.dark section .text-slate-400,
-.dark footer .text-slate-400 {
-  color: #6ee7b7; /* emerald-300 */
+.dark .high-contrast-fix .text-slate-600,
+.dark .high-contrast-fix .text-slate-500 {
+  color: #a7f3d0 !important; /* emerald-200 for crystal-clear readability */
 }
 
-.dark main .text-emerald-950,
-.dark section .text-emerald-950,
-.dark footer .text-emerald-950 {
-  color: #ffffff;
+.dark .high-contrast-fix .text-slate-400 {
+  color: #6ee7b7 !important; /* emerald-300 */
+}
+
+.dark .high-contrast-fix .text-slate-700,
+.dark .high-contrast-fix .text-slate-800 {
+  color: #ecfdf5 !important; /* emerald-50 */
+}
+
+.dark .high-contrast-fix .text-emerald-950,
+.dark .high-contrast-fix .text-emerald-900 {
+  color: #f0fdf4 !important; /* emerald-50 */
 }
 
 /* Custom text selection styling */
