@@ -25,6 +25,8 @@ interface AppState {
   isLoading: boolean;
   error: string | null;
   successMessage: string | null;
+  requiresEmailVerification?: boolean;
+  pendingVerificationEmail?: string;
   cart: CartItem[];
   wishlist: string[];
   
@@ -34,7 +36,7 @@ interface AppState {
   login: (email: string, password: string) => Promise<boolean>;
   loginWithGoogle: (data: { email: string; name: string; uid: string; role?: UserRole; phone?: string }) => Promise<boolean>;
   register: (data: { email: string; name: string; password: string; phone: string; role: UserRole }) => Promise<boolean>;
-  verifyEmail: (email: string) => Promise<boolean>;
+  verifyEmail: (email: string, token?: string) => Promise<boolean>;
   logout: () => void;
   fetchStats: () => Promise<void>;
   submitKyc: (data: { documentType: string; idNumber: string; documentUrl?: string }) => Promise<boolean>;
@@ -82,12 +84,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   isLoading: false,
   error: null,
   successMessage: null,
+  pendingVerificationEmail: "",
+  requiresEmailVerification: false,
   cart: [],
   wishlist: [],
 
   setLanguage: (lang: SupportedLanguage) => set({ lang }),
   
-  clearMessages: () => set({ error: null, successMessage: null }),
+  clearMessages: () => set({ error: null, successMessage: null, requiresEmailVerification: false, pendingVerificationEmail: "" }),
 
   initSession: async () => {
     const savedToken = localStorage.getItem("lgf_token");
@@ -172,6 +176,18 @@ export const useAppStore = create<AppState>((set, get) => ({
         return false;
       }
 
+      // SECURITY FIX: Do NOT auto-login after registration
+      // User must verify email first
+      if (data.requiresEmailVerification) {
+        set({ 
+          successMessage: data.message || "Inscription réussie ! Veuillez vérifier votre adresse e-mail.",
+          error: null,
+          requiresEmailVerification: true,
+          pendingVerificationEmail: email
+        });
+        return false; // Return false to prevent auto-login, UI should show verification prompt
+      }
+
       localStorage.setItem("lgf_token", data.token);
       set({ user: data.user, token: data.token, successMessage: data.message, error: null });
       
@@ -202,6 +218,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       if (!res.ok) {
         set({ error: data.error || "Erreur lors de la vérification de l'adresse e-mail." });
+        return false;
+      }
+
+      // SECURITY FIX: Check if email is actually verified before completing authentication
+      if (!data.verified && !data.user?.emailVerified) {
+        set({ 
+          error: "Veuillez confirmer votre adresse e-mail avant de continuer.",
+          requiresEmailVerification: true,
+          pendingVerificationEmail: email
+        });
         return false;
       }
 
