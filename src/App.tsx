@@ -20,7 +20,7 @@ import FlashDealsSection from "./components/FlashDealsSection";
 import AuthModal from "./components/AuthModal";
 import TrackOrderModal from "./components/TrackOrderModal";
 import LgfFooter from "./components/LgfFooter";
-import { executeGoogleSignIn, isFirebaseConfigured } from "./lib/firebase";
+import { executeGoogleSignIn, isFirebaseConfigured, auth } from "./lib/firebase";
 import { 
   ShoppingBag, 
   ShieldCheck, 
@@ -266,6 +266,39 @@ export default function App() {
 
   // Get localized strings
   const t = translations[lang] || translations.FR;
+
+  // Handle redirect result on app load for Google Sign-In
+  useEffect(() => {
+    const handleRedirectResult = async () => {
+      if (auth && isFirebaseConfigured) {
+        try {
+          const { getRedirectResult } = await import("firebase/auth");
+          const result = await getRedirectResult(auth);
+          if (result && result.user) {
+            const user = result.user;
+            const idToken = await user.getIdToken();
+            
+            const success = await loginWithGoogle({
+              email: user.email || "",
+              name: user.displayName || user.email?.split("@")[0] || "Utilisateur Google",
+              uid: user.uid,
+              role: "BUYER",
+            });
+            
+            if (success) {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }
+          }
+        } catch (error: any) {
+          if (!error?.message?.includes("no redirect data")) {
+            console.warn("Redirect result handling error:", error);
+          }
+        }
+      }
+    };
+    
+    handleRedirectResult();
+  }, []);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

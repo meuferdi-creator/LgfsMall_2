@@ -3,12 +3,13 @@ import { logger } from "./logger";
 import { 
   getAuth, 
   GoogleAuthProvider, 
-  signInWithPopup, 
   User as FirebaseUser,
   Auth,
   browserLocalPersistence,
   setPersistence,
-  onAuthStateChanged
+  onAuthStateChanged,
+  getRedirectResult,
+  signInWithRedirect
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -96,7 +97,7 @@ export interface GoogleSignInResult {
 /**
  * Executes a Google Sign-In.
  * Handles:
- * 1. Real Firebase Auth Google Sign-In (if keys are configured & not sandboxed)
+ * 1. Real Firebase Auth Google Sign-In with redirect method (if keys are configured & not sandboxed)
  * 2. Elegant simulated selector for sandbox iframe testing & missing secrets
  */
 export async function executeGoogleSignIn(onShowSimulatedSelector: (onSelect: (user: GoogleSignInResult) => void) => void): Promise<GoogleSignInResult> {
@@ -104,23 +105,32 @@ export async function executeGoogleSignIn(onShowSimulatedSelector: (onSelect: (u
 
   if (isFirebaseConfigured && auth && !isInIframe) {
     try {
+      // Check if this is a redirect return
+      const redirectResult = await getRedirectResult(auth);
+      if (redirectResult) {
+        const user = redirectResult.user;
+        const idToken = await user.getIdToken();
+        
+        return {
+          email: user.email || "",
+          name: user.displayName || user.email?.split("@")[0] || "Utilisateur Google",
+          photoURL: user.photoURL || undefined,
+          uid: user.uid,
+          idToken,
+        };
+      }
+      
+      // Initiate new sign-in with redirect (instant, no popup blocking issues)
       const provider = new GoogleAuthProvider();
       provider.addScope("profile");
       provider.addScope("email");
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      const idToken = await user.getIdToken();
+      await signInWithRedirect(auth, provider);
       
-      return {
-        email: user.email || "",
-        name: user.displayName || user.email?.split("@")[0] || "Utilisateur Google",
-        photoURL: user.photoURL || undefined,
-        uid: user.uid,
-        idToken,
-      };
+      // This promise never resolves as the page will redirect
+      return new Promise(() => {});
     } catch (error: any) {
-      console.warn("Firebase auth popup failed, falling back to simulator:", error);
-      // If popup fails (e.g. blocked), proceed to simulated fallback so the user doesn't get stuck
+      console.warn("Firebase auth redirect failed, falling back to simulator:", error);
+      // If redirect fails, proceed to simulated fallback so the user doesn't get stuck
     }
   }
 
