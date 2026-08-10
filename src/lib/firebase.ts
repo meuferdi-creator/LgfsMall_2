@@ -3,7 +3,6 @@ import { logger } from "./logger";
 import { 
   getAuth, 
   GoogleAuthProvider, 
-  signInWithPopup,
   User as FirebaseUser,
   Auth,
   browserLocalPersistence,
@@ -98,7 +97,7 @@ export interface GoogleSignInResult {
 /**
  * Executes a Google Sign-In.
  * Handles:
- * 1. Real Firebase Auth Google Sign-In (if keys are configured & not sandboxed)
+ * 1. Real Firebase Auth Google Sign-In with redirect method (if keys are configured & not sandboxed)
  * 2. Elegant simulated selector for sandbox iframe testing & missing secrets
  */
 export async function executeGoogleSignIn(onShowSimulatedSelector: (onSelect: (user: GoogleSignInResult) => void) => void): Promise<GoogleSignInResult> {
@@ -106,12 +105,10 @@ export async function executeGoogleSignIn(onShowSimulatedSelector: (onSelect: (u
 
   if (isFirebaseConfigured && auth && !isInIframe) {
     try {
-      const provider = new GoogleAuthProvider();
-      provider.addScope("profile");
-      provider.addScope("email");
-      const result = await signInWithPopup(auth, provider);
-      if (result && result.user) {
-        const user = result.user;
+      // Check if this is a redirect return
+      const redirectResult = await getRedirectResult(auth);
+      if (redirectResult) {
+        const user = redirectResult.user;
         const idToken = await user.getIdToken();
         
         return {
@@ -122,8 +119,18 @@ export async function executeGoogleSignIn(onShowSimulatedSelector: (onSelect: (u
           idToken,
         };
       }
+      
+      // Initiate new sign-in with redirect (instant, no popup blocking issues)
+      const provider = new GoogleAuthProvider();
+      provider.addScope("profile");
+      provider.addScope("email");
+      await signInWithRedirect(auth, provider);
+      
+      // This promise never resolves as the page will redirect
+      return new Promise(() => {});
     } catch (error: any) {
-      console.warn("Firebase auth popup failed or blocked, falling back to in-app Google selector:", error);
+      console.warn("Firebase auth redirect failed, falling back to simulator:", error);
+      // If redirect fails, proceed to simulated fallback so the user doesn't get stuck
     }
   }
 

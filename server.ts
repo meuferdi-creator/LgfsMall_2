@@ -303,6 +303,18 @@ app.post("/api/auth/register", async (req, res) => {
     return res.status(400).json({ error: "Veuillez remplir tous les champs obligatoires (Nom, Email, Mot de passe, Rôle)." });
   }
 
+  // Email validation regex
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: "Veuillez fournir une adresse e-mail valide." });
+  }
+
+  // Password strength validation (min 8 chars, at least 1 number and 1 letter)
+  const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
+  if (!passwordRegex.test(password)) {
+    return res.status(400).json({ error: "Le mot de passe doit contenir au moins 8 caractères, dont une lettre et un chiffre." });
+  }
+
   const validRoles = ["BUYER", "VENDOR", "DRIVER", "INVESTOR", "ADMIN"];
   if (!validRoles.includes(role)) {
     return res.status(400).json({ error: "Rôle utilisateur invalide." });
@@ -314,14 +326,15 @@ app.post("/api/auth/register", async (req, res) => {
       return res.status(400).json({ error: "Un compte avec cette adresse email existe déjà." });
     }
 
-    const hashedPassword = bcryptjs.hashSync(password, 10);
+    const hashedPassword = bcryptjs.hashSync(password, 12); // Increased salt rounds for better security
     const newUser = await prisma.user.create({
       data: {
-        email,
+        email: email.toLowerCase().trim(),
         name,
         password: hashedPassword,
         phone,
-        role
+        role,
+        isEmailVerified: false // Explicitly set to false - requires email verification
       }
     });
 
@@ -337,11 +350,14 @@ app.post("/api/auth/register", async (req, res) => {
       });
     }
 
-    // Generate Email Verification Token for secure link confirmation
-    const verificationToken = Math.random().toString(36).substring(2, 10).toUpperCase();
+    // DO NOT auto-login - require email verification first
+    // Generate verification token instead
+    const verificationToken = crypto.randomBytes(32).toString("hex");
     const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-    // Log verification token for developer/admin console inspection & simulation
+    
+    // Store verification token (you could create a separate table or use a temp field)
+    // For now, we'll send it via email simulation
+    
     // TODO: Send real verification email
     // await sendVerificationEmail(email, verificationToken);
     

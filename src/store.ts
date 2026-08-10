@@ -239,6 +239,16 @@ export const useAppStore = create<AppState>((set, get) => ({
         return false;
       }
 
+      // SECURITY FIX: Check if email is actually verified before completing authentication
+      if (!data.verified && !data.user?.emailVerified) {
+        set({ 
+          error: "Veuillez confirmer votre adresse e-mail avant de continuer.",
+          requiresEmailVerification: true,
+          pendingVerificationEmail: email
+        });
+        return false;
+      }
+
       localStorage.setItem("lgf_token", data.token);
       set({ user: data.user, token: data.token, successMessage: data.message, error: null, requiresEmailVerification: false, pendingVerificationEmail: "" });
 
