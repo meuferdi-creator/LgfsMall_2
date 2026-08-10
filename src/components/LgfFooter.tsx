@@ -27,7 +27,7 @@ export default function LgfFooter({
   const isDark = theme === "dark";
 
   return (
-    <footer className={`w-full transition-colors duration-200 ${
+    <footer id="lgf-footer" className={`lgf-footer high-contrast-fix w-full transition-colors duration-200 ${
       isDark ? "bg-emerald-950 text-slate-200 border-t border-emerald-900" : "bg-white text-slate-700 border-t border-slate-200/80"
     }`}>
       {/* TRUST BADGES ROW (MATCHES SCREENSHOT) */}

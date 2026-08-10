@@ -139,12 +139,30 @@ export const useAppStore = create<AppState>((set, get) => ({
       const data = await res.json();
       
       if (!res.ok) {
+        if (data.requiresEmailVerification) {
+          set({
+            error: data.error || "Veuillez confirmer votre adresse e-mail avant de continuer.",
+            requiresEmailVerification: true,
+            pendingVerificationEmail: email
+          });
+          return false;
+        }
         set({ error: data.error || "Identifiants invalides." });
         return false;
       }
 
+      // SECURITY FIX: Check if email is actually verified before completing authentication
+      if (!data.verified && !data.user?.isEmailVerified) {
+        set({ 
+          error: "Veuillez confirmer votre adresse e-mail avant de continuer.",
+          requiresEmailVerification: true,
+          pendingVerificationEmail: email
+        });
+        return false;
+      }
+
       localStorage.setItem("lgf_token", data.token);
-      set({ user: data.user, token: data.token, successMessage: data.message, error: null });
+      set({ user: data.user, token: data.token, successMessage: data.message, error: null, requiresEmailVerification: false, pendingVerificationEmail: "" });
       
       // Real-time Firestore sync
       if (data.user) {
@@ -206,13 +224,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  verifyEmail: async (email) => {
+  verifyEmail: async (email, token) => {
     set({ isLoading: true, error: null, successMessage: null });
     try {
       const res = await fetch(`${API_BASE}/auth/verify-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, token }),
       });
       const data = await res.json();
 
@@ -232,7 +250,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       localStorage.setItem("lgf_token", data.token);
-      set({ user: data.user, token: data.token, successMessage: data.message, error: null });
+      set({ user: data.user, token: data.token, successMessage: data.message, error: null, requiresEmailVerification: false, pendingVerificationEmail: "" });
 
       // Real-time Firestore sync
       if (data.user) {

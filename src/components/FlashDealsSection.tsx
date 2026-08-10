@@ -36,7 +36,7 @@ export default function FlashDealsSection({
   if (flashProducts.length === 0) return null;
 
   return (
-    <section id="flash-deals-section" className="bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-amber-500/10 dark:from-amber-950/40 dark:via-rose-950/30 dark:to-amber-950/40 p-6 sm:p-8 rounded-3xl border border-amber-300/40 dark:border-amber-700/40 shadow-xl space-y-6">
+    <section id="flash-deals-section" className="high-contrast-fix bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-amber-500/10 dark:from-amber-950/40 dark:via-rose-950/30 dark:to-amber-950/40 p-6 sm:p-8 rounded-3xl border border-amber-300/40 dark:border-amber-700/40 shadow-xl space-y-6">
       
       {/* Section Header with Live Timer */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-amber-200/60 dark:border-amber-800/60 pb-4">

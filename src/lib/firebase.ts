@@ -134,7 +134,7 @@ export async function executeGoogleSignIn(onShowSimulatedSelector: (onSelect: (u
     }
   }
 
-  // Simulated google auth fallback for iframe environments and local runs
+  // In-app Google auth selector for iframe preview & smooth direct navigation
   return new Promise<GoogleSignInResult>((resolve) => {
     onShowSimulatedSelector((selectedUser) => {
       resolve(selectedUser);
