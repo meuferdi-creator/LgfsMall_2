@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Product } from "../types";
 import EcobankPaymentCard from "./EcobankPaymentCard";
+import TMoneyPaymentCard from "./TMoneyPaymentCard";
 
 export interface CartItem {
   id: string; // unique cart item compound key
@@ -99,26 +100,49 @@ export default function CartDrawer({
   });
 
   // Promo Code Validation
-  const handleApplyPromo = () => {
+  const handleApplyPromo = async () => {
     setPromoError(null);
     const code = promoCode.trim().toUpperCase();
-    
-    if (code === "LGF2026") {
-      setPromoDiscount(15); // 15% discount
-      setPromoApplied(code);
-      setPromoError(null);
-    } else if (code === "ASSIGAME") {
-      setPromoDiscount(10); // 10% discount
-      setPromoApplied(code);
-      setPromoError(null);
-    } else if (code === "TOGO") {
-      setPromoDiscount(5); // 5% discount
-      setPromoApplied(code);
-      setPromoError(null);
-    } else {
-      setPromoError("Code promo invalide ou expiré.");
-      setPromoDiscount(0);
-      setPromoApplied(null);
+    if (!code) return;
+
+    try {
+      const res = await fetch("/api/coupons/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, totalAmount: totalProductCost })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.valid) {
+        if (data.discountType === "PERCENTAGE") {
+          setPromoDiscount(data.discountValue);
+        } else {
+          // If fixed amount FCFA discount, convert to equivalent % or set directly
+          const equivalentPercent = Math.min(100, Math.round((data.discountAmount / (totalProductCost || 1)) * 100));
+          setPromoDiscount(equivalentPercent);
+        }
+        setPromoApplied(data.code);
+        setPromoError(null);
+      } else {
+        setPromoError(data.error || "Code promo invalide ou expiré.");
+        setPromoDiscount(0);
+        setPromoApplied(null);
+      }
+    } catch (err) {
+      // Local fallback
+      if (code === "LGF2026" || code === "LGF10") {
+        setPromoDiscount(10);
+        setPromoApplied(code);
+        setPromoError(null);
+      } else if (code === "AVEDJI20") {
+        setPromoDiscount(20);
+        setPromoApplied(code);
+        setPromoError(null);
+      } else {
+        setPromoError("Code promo invalide ou expiré.");
+        setPromoDiscount(0);
+        setPromoApplied(null);
+      }
     }
   };
 
@@ -543,16 +567,19 @@ export default function CartDrawer({
                   )}
 
                   {(paymentMethod === "TMoney" || paymentMethod === "Flooz") && (
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-emerald-700 uppercase block font-mono">Numéro Mobile Money (+228) :</label>
-                      <input
-                        type="text"
-                        placeholder="Ex: 90 12 34 56"
-                        value={paymentPhone}
-                        onChange={(e) => setPaymentPhone(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-800 font-mono"
-                        required
-                      />
+                    <div className="space-y-3 pt-1">
+                      <TMoneyPaymentCard amount={grandTotal} method={paymentMethod} formatCurrency={formatCurrency} />
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-emerald-700 uppercase block font-mono">Votre Numéro Mobile Money (+228) :</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: 90 12 34 56"
+                          value={paymentPhone}
+                          onChange={(e) => setPaymentPhone(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-800 font-mono"
+                          required
+                        />
+                      </div>
                     </div>
                   )}
                 </div>

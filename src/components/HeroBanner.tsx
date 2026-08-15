@@ -24,7 +24,7 @@ const HERO_SLIDES: HeroSlide[] = [
     subtitle: "Samsung, Tecno, Xiaomi, iPhone reconditionné — profitez de ventes flash quotidiennes, garantie locale et livraison express à Lomé en 24h.",
     primaryBtnText: "Voir les ventes flash",
     secondaryBtnText: "Tous les téléphones",
-    bgImage: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1600&q=80",
+    bgImage: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=70",
     tags: ["Mobile Money", "Livraison Lomé 24h", "Paiement sécurisé"]
   },
   {
@@ -36,7 +36,7 @@ const HERO_SLIDES: HeroSlide[] = [
     subtitle: "Tenues traditionnelles, tissus authentiques et accessoires fabriqués au Togo. Commandez en détail ou bénéficiez de prix de gros négociés.",
     primaryBtnText: "Découvrir la Mode",
     secondaryBtnText: "Commander en Gros",
-    bgImage: "https://images.unsplash.com/photo-1590736704728-f4730bb30770?auto=format&fit=crop&w=1600&q=80",
+    bgImage: "https://images.unsplash.com/photo-1590736704728-f4730bb30770?auto=format&fit=crop&w=1200&q=70",
     tags: ["100% Fait au Togo", "Wholesale Discounts", "Livraison Régions"]
   },
   {
@@ -48,7 +48,7 @@ const HERO_SLIDES: HeroSlide[] = [
     subtitle: "Réfrigérateurs, climatiseurs, cuisinières et ustensiles de cuisine. Séquestre LGF : vos fonds restent bloqués jusqu'à livraison conforme.",
     primaryBtnText: "Nos Électroménagers",
     secondaryBtnText: "Garantie 12 Mois",
-    bgImage: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=1600&q=80",
+    bgImage: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=1200&q=70",
     tags: ["Paiement Escrow", "Installation Inclus", "Support +228 72 99 81 48"]
   }
 ];

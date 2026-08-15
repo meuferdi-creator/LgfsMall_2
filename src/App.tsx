@@ -1,4 +1,4 @@
-import React, { useEffect, useState, lazy, Suspense } from "react";
+import React, { useEffect, useState, useCallback, lazy, Suspense } from "react";
 import { useAppStore } from "./store";
 import { translations, SupportedLanguage } from "./translations";
 import { UserRole } from "./types";
@@ -40,8 +40,14 @@ import HeroBanner from "./components/HeroBanner";
 import FlashDealsSection from "./components/FlashDealsSection";
 import AuthModal from "./components/AuthModal";
 import TrackOrderModal from "./components/TrackOrderModal";
+import NotificationBanner from "./components/NotificationBanner";
 import LgfFooter from "./components/LgfFooter";
-import { executeGoogleSignIn, isFirebaseConfigured, auth } from "./lib/firebase";
+import GeminiAssistantWidget from "./components/GeminiAssistantWidget";
+import HelpCenterPage from "./components/HelpCenterPage";
+import InfoPages from "./components/InfoPages";
+import { supabase, isSupabaseConfigured } from "./lib/supabaseClient";
+import { executeGoogleSignIn } from "./lib/firebase";
+import { Session } from "@supabase/supabase-js";
 import { 
   ShoppingBag, 
   ShieldCheck, 
@@ -67,6 +73,8 @@ import {
   Plus,
   Trash,
   Edit,
+  Edit3,
+  Check,
   Search,
   Eye,
   Sun,
@@ -108,6 +116,7 @@ export default function App() {
     logout,
     fetchStats,
     submitKyc,
+    updateUserProfile,
     fetchPendingKycs,
     fetchAllUsers,
     verifyKyc,
@@ -122,7 +131,12 @@ export default function App() {
     confirmOrderDelivery,
     withdrawEscrowFunds,
     fetchInvestments,
-    createInvestment
+    createInvestment,
+    investmentProjects,
+    fetchInvestmentProjects,
+    createInvestmentProject,
+    updateInvestmentProject,
+    deleteInvestmentProject
   } = useAppStore();
 
   // Role-specific workspace tab selections
@@ -166,6 +180,27 @@ export default function App() {
   const [sandboxRole, setSandboxRole] = useState<UserRole>("ADMIN");
   const [currentDashboardView, setCurrentDashboardView] = useState<"workspace" | "live">("workspace");
 
+  // User profile editing state
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [profilePhone, setProfilePhone] = useState("");
+
+  // Helper for persisted account creation timestamp formatting
+  const formatAccountCreationDate = (createdAt?: string | Date | null) => {
+    if (!createdAt) return "Date non disponible";
+    const d = new Date(createdAt);
+    if (isNaN(d.getTime())) return "Date non disponible";
+    return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const ok = await updateUserProfile({ name: profileName, phone: profilePhone });
+    if (ok) {
+      setIsEditingProfile(false);
+    }
+  };
+
   // Auth toggle ("login" | "register")
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   
@@ -199,6 +234,51 @@ export default function App() {
     return (saved === "light" || saved === "dark") ? saved : "light";
   });
 
+  // Client Routing State & Sync
+  const [currentRoute, setCurrentRoute] = useState<string>(() => {
+    const path = window.location.pathname.replace(/^\//, "");
+    const hash = window.location.hash.replace(/^#/, "").split("?")[0];
+    return hash || path || "home";
+  });
+  const [faqCategoryParam, setFaqCategoryParam] = useState<string>("all");
+  const [faqSearchParam, setFaqSearchParam] = useState<string>("");
+
+  useEffect(() => {
+    const syncRouteFromLocation = () => {
+      const path = window.location.pathname.replace(/^\//, "");
+      const hashFull = window.location.hash.replace(/^#/, "");
+      const [hashRoute, hashQuery] = hashFull.split("?");
+      const route = hashRoute || path || "home";
+
+      setCurrentRoute(route);
+
+      const searchString = hashQuery || window.location.search.replace(/^\?/, "");
+      const params = new URLSearchParams(searchString);
+      if (params.has("category")) {
+        setFaqCategoryParam(params.get("category") || "all");
+      }
+      if (params.has("q")) {
+        setFaqSearchParam(params.get("q") || "");
+      }
+    };
+
+    syncRouteFromLocation();
+
+    window.addEventListener("hashchange", syncRouteFromLocation);
+    window.addEventListener("popstate", syncRouteFromLocation);
+
+    return () => {
+      window.removeEventListener("hashchange", syncRouteFromLocation);
+      window.removeEventListener("popstate", syncRouteFromLocation);
+    };
+  }, []);
+
+  const navigateToRoute = (route: string) => {
+    setCurrentRoute(route);
+    window.location.hash = `#${route}`;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   // Simulated Email Verification flow state
   const [showSimulatedEmailModal, setShowSimulatedEmailModal] = useState(false);
   const [simulatedUserForVerification, setSimulatedUserForVerification] = useState<{
@@ -208,43 +288,89 @@ export default function App() {
     userObj: any;
   } | null>(null);
 
-  // Google Sign-In state
-  const [showGoogleSelector, setShowGoogleSelector] = useState(false);
-  const [googleSelectorCallback, setGoogleSelectorCallback] = useState<((user: any) => void) | null>(null);
-  const [googleCustomEmail, setGoogleCustomEmail] = useState("");
-  const [googleCustomName, setGoogleCustomName] = useState("");
-  const [googleCustomRole, setGoogleCustomRole] = useState<UserRole>("BUYER");
+  // Active Supabase session handler
+  const handleSupabaseSession = useCallback(async (session: Session | null) => {
+    if (!session?.user) return;
+
+    const sbUser = session.user;
+
+    // 1. Retrieve user and check if profile exists in Supabase `profiles` table; if not, insert profile row
+    try {
+      const { data: existingProfile, error: fetchErr } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", sbUser.id)
+        .maybeSingle();
+
+      if (!existingProfile && !fetchErr) {
+        const fullName =
+          sbUser.user_metadata?.full_name ||
+          sbUser.user_metadata?.name ||
+          sbUser.email?.split("@")[0] ||
+          "Utilisateur Google";
+        const avatarUrl = sbUser.user_metadata?.avatar_url || "";
+
+        await supabase.from("profiles").insert([
+          {
+            id: sbUser.id,
+            email: sbUser.email,
+            full_name: fullName,
+            avatar_url: avatarUrl,
+            role: "customer",
+            created_at: new Date().toISOString(),
+          },
+        ]);
+      }
+    } catch (err) {
+      console.warn("Supabase profile check/insertion note:", err);
+    }
+
+    // 2. Ensure session persistence & sync account into store/database state
+    const currentStoreUser = useAppStore.getState().user;
+    if (!currentStoreUser && sbUser.email) {
+      const fullName =
+        sbUser.user_metadata?.full_name ||
+        sbUser.user_metadata?.name ||
+        sbUser.email.split("@")[0] ||
+        "Utilisateur Google";
+
+      const success = await loginWithGoogle({
+        email: sbUser.email,
+        name: fullName,
+        uid: sbUser.id,
+        role: "BUYER",
+      });
+
+      if (success) {
+        setIsAuthModalOpen(false);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    }
+  }, [loginWithGoogle]);
 
   const handleGoogleSignInClick = async () => {
     try {
-      setIsAuthModalOpen(false); // Close auth modal immediately so user isn't forced to close it
-      const result = await executeGoogleSignIn((onSelect) => {
-        setGoogleSelectorCallback(() => (selectedUser: any) => {
-          setShowGoogleSelector(false);
-          setGoogleSelectorCallback(null);
-          onSelect(selectedUser);
-        });
-        setShowGoogleSelector(true);
+      console.log("🔥 [Firebase Google Auth] Initiating Google Sign-In...");
+      const googleUser = await executeGoogleSignIn();
+      if (!googleUser) {
+        console.log("🔥 [Firebase Google Auth] Sign-In popup closed or cancelled.");
+        return;
+      }
+
+      console.log("🔥 [Firebase Google Auth] Authenticated user:", googleUser.email);
+      const success = await loginWithGoogle({
+        email: googleUser.email,
+        name: googleUser.name,
+        uid: googleUser.uid,
+        role: "BUYER",
       });
-      
-      if (result) {
-        const success = await loginWithGoogle({
-          email: result.email,
-          name: result.name,
-          uid: result.uid,
-          role: (result as any).role || "BUYER",
-        });
-        
-        if (success) {
-          setIsAuthModalOpen(false);
-          setShowGoogleSelector(false);
-          setGoogleCustomEmail("");
-          setGoogleCustomName("");
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        }
+
+      if (success) {
+        setIsAuthModalOpen(false);
+        window.scrollTo({ top: 0, behavior: "smooth" });
       }
     } catch (e: any) {
-      console.error("Google Sign-In integration error:", e);
+      console.error("🔥 [Firebase Google Auth Error]:", e);
     }
   };
 
@@ -266,6 +392,13 @@ export default function App() {
     fetchProducts();
   }, [initSession, fetchStats, fetchProducts]);
 
+  // Auto-redirect user to their dedicated role portal upon login
+  useEffect(() => {
+    if (user?.role) {
+      setActivePortalRole(user.role);
+    }
+  }, [user]);
+
   // Load lists when user state transitions
   useEffect(() => {
     if (user) {
@@ -278,10 +411,12 @@ export default function App() {
       }
       if (user.role === "INVESTOR" || user.role === "ADMIN") {
         fetchInvestments();
+        fetchInvestmentProjects();
       }
       if (user.role === "ADMIN") {
         fetchPendingKycs();
         fetchAllUsers();
+        fetchInvestmentProjects();
       }
       if (pendingPurchase) {
         const timer = setTimeout(() => {
@@ -290,43 +425,72 @@ export default function App() {
         return () => clearTimeout(timer);
       }
     }
-  }, [user, pendingPurchase, fetchBuyerOrders, fetchVendorProducts, fetchVendorOrders, fetchInvestments, fetchPendingKycs, fetchAllUsers]);
+  }, [user, pendingPurchase, fetchBuyerOrders, fetchVendorProducts, fetchVendorOrders, fetchInvestments, fetchPendingKycs, fetchAllUsers, fetchInvestmentProjects]);
+
+  // Auto-dismiss notification banners (success / error) after 8000ms (8 seconds)
+  useEffect(() => {
+    if (successMessage || error) {
+      const timer = setTimeout(() => {
+        clearMessages();
+      }, 8000);
+
+      return () => {
+        clearTimeout(timer);
+      };
+    }
+  }, [successMessage, error, clearMessages]);
 
   // Get localized strings
   const t = translations[lang] || translations.FR;
 
-  // Handle redirect result on app load for Google Sign-In
+  // Active Supabase auth state listener & automatic profile creation on Google OAuth login
   useEffect(() => {
-    const handleRedirectResult = async () => {
-      if (auth && isFirebaseConfigured) {
-        try {
-          const { getRedirectResult } = await import("firebase/auth");
-          const result = await getRedirectResult(auth);
-          if (result && result.user) {
-            const user = result.user;
-            const idToken = await user.getIdToken();
-            
-            const success = await loginWithGoogle({
-              email: user.email || "",
-              name: user.displayName || user.email?.split("@")[0] || "Utilisateur Google",
-              uid: user.uid,
-              role: "BUYER",
-            });
-            
-            if (success) {
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }
-          }
-        } catch (error: any) {
-          if (!error?.message?.includes("no redirect data")) {
-            console.warn("Redirect result handling error:", error);
-          }
+    if (!isSupabaseConfigured) return;
+
+    // 0. Detect if running inside OAuth popup callback
+    if (window.opener && (window.location.hash.includes("access_token") || window.location.search.includes("code="))) {
+      try {
+        window.opener.postMessage({ type: "SUPABASE_AUTH_SUCCESS" }, "*");
+      } catch (e) {
+        console.warn("Could not post message to opener:", e);
+      }
+      setTimeout(() => {
+        try { window.close(); } catch (e) {}
+      }, 500);
+    }
+
+    // Retrieve initial active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        handleSupabaseSession(session);
+      }
+    }).catch((err) => {
+      console.warn("Initial Supabase session fetch error:", err);
+    });
+
+    // Listen to Auth State Changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session) {
+        await handleSupabaseSession(session);
+      }
+    });
+
+    // Listen to message from popup
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.data?.type === "SUPABASE_AUTH_SUCCESS" || event.data?.type === "OAUTH_AUTH_SUCCESS") {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          await handleSupabaseSession(session);
         }
       }
     };
-    
-    handleRedirectResult();
-  }, []);
+    window.addEventListener("message", handleMessage);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener("message", handleMessage);
+    };
+  }, [handleSupabaseSession]);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -444,36 +608,64 @@ export default function App() {
         }}
         logout={logout}
         formatCurrency={formatCurrency}
-        activePortalRole={activePortalRole}
-        onChangePortalRole={(role) => setActivePortalRole(role)}
+        activePortalRole={user?.role === "ADMIN" ? sandboxRole : activePortalRole}
+        onChangePortalRole={(role) => {
+          setActivePortalRole(role);
+          setSandboxRole(role);
+          setCurrentDashboardView("workspace");
+          setTimeout(() => {
+            const dashboardEl = document.getElementById("user-dashboard");
+            if (dashboardEl) {
+              dashboardEl.scrollIntoView({ behavior: "smooth" });
+            }
+          }, 50);
+        }}
       />
 
       {/* GLOBAL SYSTEM ALERTS & MESSAGES */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full mt-4">
-        {error && (
-          <div className="bg-rose-50 border-l-4 border-rose-500 text-rose-900 p-4 rounded-r-xl flex items-start space-x-3 shadow-xs animate-fade-in">
-            <XCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold">{error}</p>
-            </div>
-            <button onClick={clearMessages} className="text-rose-400 hover:text-rose-600 text-xs font-bold font-mono">✕</button>
-          </div>
-        )}
-        {successMessage && (
-          <div className="bg-emerald-50 border-l-4 border-emerald-500 text-emerald-900 p-4 rounded-r-xl flex items-start space-x-3 shadow-xs animate-fade-in">
-            <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold">{successMessage}</p>
-            </div>
-            <button onClick={clearMessages} className="text-emerald-400 hover:text-emerald-600 text-xs font-bold font-mono">✕</button>
-          </div>
-        )}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full mt-4 space-y-3">
+        <NotificationBanner
+          message={error}
+          type="error"
+          onClose={clearMessages}
+          autoDismissMs={8000}
+        />
+        <NotificationBanner
+          message={successMessage}
+          type="success"
+          onClose={clearMessages}
+          autoDismissMs={8000}
+        />
       </div>
 
       {/* MAIN LAYOUT ENGINE */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 md:pb-8 space-y-8">
-        
-        {/* HERO BANNER & PROMOTIONAL FLASH DEALS */}
+        {(currentRoute === "help" || currentRoute === "faq") ? (
+          <HelpCenterPage
+            user={user}
+            onNavigateHome={() => navigateToRoute("home")}
+            initialCategory={faqCategoryParam}
+            initialSearchQuery={faqSearchParam}
+          />
+        ) : [
+          "about", "careers", "blog", "press", "sustainability", 
+          "delivery", "shipping", "returns", "payments", "commissions", 
+          "ads", "affiliates", "terms", "privacy", "cookies"
+        ].includes(currentRoute) ? (
+          <InfoPages
+            slug={currentRoute}
+            user={user}
+            onNavigateHome={() => navigateToRoute("home")}
+            onNavigateHelp={() => navigateToRoute("help")}
+            onOpenVendorPortal={() => {
+              if (!user) setIsAuthModalOpen(true);
+              else setActivePortalRole("VENDOR");
+            }}
+            onOpenTrackOrders={() => setIsTrackOrderModalOpen(true)}
+          />
+        ) : (
+          <>
+            {/* HERO BANNER & PROMOTIONAL FLASH DEALS */}
         {(!user || activePortalRole === "BUYER") && (
           <div className="space-y-8">
             <HeroBanner
@@ -508,23 +700,36 @@ export default function App() {
 
         {/* LANDING / HERO VIEW (IF NOT AUTHENTICATED) */}
         {!user ? (
-          <>
-          {/* BUYER PORTAL CATALOG */}
-          <div id="public-catalog">
-            <BuyerPortal
-              products={products}
-              buyerOrders={[]}
-              placeOrder={async () => {
-                setIsAuthModalOpen(true);
-                return false;
-              }}
-              confirmOrderDelivery={async () => false}
-              fetchStats={fetchStats}
-              formatCurrency={formatCurrency}
-              isLoading={isLoading}
-            />
-          </div>
-        </>
+          currentDashboardView === "live" ? (
+            <div className="bg-white dark:bg-emerald-950 rounded-3xl p-6 border border-emerald-100 dark:border-emerald-800 shadow-xl">
+              <LiveCommerce
+                user={null}
+                products={products}
+                formatCurrency={formatCurrency}
+                onBuyProduct={(productId, quantity) => {
+                  setOrderProductId(productId);
+                  setShowOrderModal(true);
+                }}
+              />
+            </div>
+          ) : (
+            <div id="public-catalog">
+              <BuyerPortal
+                products={products}
+                buyerOrders={[]}
+                placeOrder={async () => {
+                  setIsAuthModalOpen(true);
+                  return false;
+                }}
+                confirmOrderDelivery={async () => false}
+                fetchStats={fetchStats}
+                formatCurrency={formatCurrency}
+                isLoading={isLoading}
+                externalCategory={catalogCategory}
+                externalSearch={catalogSearch}
+              />
+            </div>
+          )
         ) : (
           
           /* AUTHENTICATED USER WORKSPACE DASHBOARD */
@@ -611,28 +816,115 @@ export default function App() {
               <div className="lg:col-span-4 space-y-8">
                 
                 {/* 1. PORTFOLIO / USER CARD */}
-                <div className="bg-white rounded-3xl p-6 border border-emerald-100/50 shadow-xl text-emerald-950 space-y-4">
-                  <h3 className="text-sm font-bold text-emerald-950 font-display flex items-center">
-                    <UserIcon className="w-4 h-4 mr-2 text-emerald-600" />
-                    Profil de l'Utilisateur
-                  </h3>
-                  
-                  <div className="border-t border-emerald-50 pt-3 space-y-3 text-xs">
-                    <div className="flex justify-between py-1.5 border-b border-emerald-50">
-                      <span className="text-emerald-800 font-medium">Adresse Email</span>
-                      <span className="text-emerald-950 font-semibold font-mono">{user.email}</span>
-                    </div>
-                    <div className="flex justify-between py-1.5 border-b border-emerald-50">
-                      <span className="text-emerald-800 font-medium">Téléphone</span>
-                      <span className="text-emerald-950 font-semibold">{user.phone || "Non renseigné"}</span>
-                    </div>
-                    <div className="flex justify-between py-1.5 border-b border-emerald-50">
-                      <span className="text-emerald-800 font-medium">Création</span>
-                      <span className="text-emerald-950 font-semibold font-mono">
-                        {new Date(user.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
-                      </span>
-                    </div>
+                <div className="bg-white dark:bg-emerald-950 rounded-3xl p-6 border border-emerald-100/50 dark:border-emerald-800/50 shadow-xl text-emerald-950 dark:text-slate-100 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-emerald-950 dark:text-white font-display flex items-center">
+                      <UserIcon className="w-4 h-4 mr-2 text-emerald-600 dark:text-emerald-400" />
+                      Profil de l'Utilisateur
+                    </h3>
+                    {!isEditingProfile ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileName(user.name || "");
+                          setProfilePhone(user.phone || "");
+                          setIsEditingProfile(true);
+                        }}
+                        className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/40 hover:bg-emerald-100 dark:hover:bg-emerald-800/60 px-2.5 py-1 rounded-xl transition-all cursor-pointer flex items-center space-x-1"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                        <span>Éditer mon profil</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingProfile(false)}
+                        className="text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 px-2 py-1 cursor-pointer"
+                      >
+                        Annuler
+                      </button>
+                    )}
                   </div>
+                  
+                  {!isEditingProfile ? (
+                    <div className="border-t border-emerald-50 dark:border-emerald-900/50 pt-3 space-y-3 text-xs">
+                      <div className="flex justify-between py-1.5 border-b border-emerald-50 dark:border-emerald-900/50">
+                        <span className="text-emerald-800 dark:text-emerald-300 font-medium">Nom & Prénom</span>
+                        <span className="text-emerald-950 dark:text-white font-bold">{user.name || "Non renseigné"}</span>
+                      </div>
+                      <div className="flex justify-between py-1.5 border-b border-emerald-50 dark:border-emerald-900/50">
+                        <span className="text-emerald-800 dark:text-emerald-300 font-medium">Adresse Email</span>
+                        <span className="text-emerald-950 dark:text-white font-semibold font-mono truncate max-w-[170px]">{user.email}</span>
+                      </div>
+                      <div className="flex justify-between py-1.5 border-b border-emerald-50 dark:border-emerald-900/50">
+                        <span className="text-emerald-800 dark:text-emerald-300 font-medium">Téléphone</span>
+                        <span className="text-emerald-950 dark:text-white font-semibold">{user.phone || "Non renseigné"}</span>
+                      </div>
+                      <div className="flex justify-between py-1.5 border-b border-emerald-50 dark:border-emerald-900/50">
+                        <span className="text-emerald-800 dark:text-emerald-300 font-medium">Création</span>
+                        <span className="text-emerald-950 dark:text-white font-semibold font-mono">
+                          {formatAccountCreationDate(user.createdAt)}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSaveProfile} className="border-t border-emerald-50 dark:border-emerald-900/50 pt-3 space-y-3 text-xs">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-emerald-800 dark:text-emerald-300 mb-1">
+                          Nom & Prénom
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={profileName}
+                          onChange={(e) => setProfileName(e.target.value)}
+                          className="w-full bg-slate-50 dark:bg-emerald-900/50 border border-slate-200 dark:border-emerald-800 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          placeholder="Ex: LGF Admin Global"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-emerald-800 dark:text-emerald-300 mb-1">
+                          Téléphone
+                        </label>
+                        <input
+                          type="text"
+                          value={profilePhone}
+                          onChange={(e) => setProfilePhone(e.target.value)}
+                          className="w-full bg-slate-50 dark:bg-emerald-900/50 border border-slate-200 dark:border-emerald-800 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          placeholder="+228 90 00 00 00"
+                        />
+                      </div>
+
+                      <div className="py-1">
+                        <span className="block text-[10px] font-bold uppercase text-emerald-800 dark:text-emerald-300 mb-0.5">Adresse Email</span>
+                        <span className="text-slate-500 dark:text-slate-400 font-mono text-xs truncate block">{user.email}</span>
+                      </div>
+
+                      <div className="py-1">
+                        <span className="block text-[10px] font-bold uppercase text-emerald-800 dark:text-emerald-300 mb-0.5">Création</span>
+                        <span className="text-slate-500 dark:text-slate-400 font-mono text-xs">{formatAccountCreationDate(user.createdAt)}</span>
+                      </div>
+
+                      <div className="pt-2 flex gap-2">
+                        <button
+                          type="submit"
+                          disabled={isLoading}
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3 rounded-xl text-xs shadow-md transition-all cursor-pointer flex items-center justify-center space-x-1"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Enregistrer</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingProfile(false)}
+                          className="bg-slate-100 dark:bg-emerald-900/40 hover:bg-slate-200 dark:hover:bg-emerald-800 text-slate-700 dark:text-slate-200 font-bold py-2 px-3 rounded-xl text-xs transition-all cursor-pointer"
+                        >
+                          Annuler
+                        </button>
+                      </div>
+                    </form>
+                  )}
                 </div>
 
                 {/* 2. REGULATORY KYC SUBMISSION PANEL */}
@@ -652,7 +944,14 @@ export default function App() {
                         ? "bg-rose-100 text-rose-800 border border-rose-200"
                         : "bg-emerald-50 text-emerald-600 border border-emerald-100"
                     }`}>
-                      {user.kyc ? t[`kyc${user.kyc.status as "APPROVED" | "PENDING" | "REJECTED"}`] : t.kycNone}
+                      {user.kyc
+                        ? t[
+                            (`kyc${user.kyc.status.charAt(0) + user.kyc.status.slice(1).toLowerCase()}` as
+                              | "kycApproved"
+                              | "kycPending"
+                              | "kycRejected")
+                          ]
+                        : t.kycNone}
                     </span>
                   </div>
 
@@ -753,50 +1052,65 @@ export default function App() {
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <button
-                        onClick={() => setSandboxRole("BUYER")}
+                        onClick={() => {
+                          setSandboxRole("BUYER");
+                          setActivePortalRole("BUYER");
+                        }}
                         className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
                           sandboxRole === "BUYER"
-                            ? "bg-amber-600 text-white shadow-sm"
+                            ? "bg-amber-600 text-white shadow-sm font-extrabold"
                             : "bg-white text-amber-900 border border-amber-200 hover:bg-amber-100/40"
                         }`}
                       >
                         Portail Client (Acheteur)
                       </button>
                       <button
-                        onClick={() => setSandboxRole("VENDOR")}
+                        onClick={() => {
+                          setSandboxRole("VENDOR");
+                          setActivePortalRole("VENDOR");
+                        }}
                         className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
                           sandboxRole === "VENDOR"
-                            ? "bg-amber-600 text-white shadow-sm"
+                            ? "bg-amber-600 text-white shadow-sm font-extrabold"
                             : "bg-white text-amber-900 border border-amber-200 hover:bg-amber-100/40"
                         }`}
                       >
                         Portail Vendeur (Storefront CRUD)
                       </button>
                       <button
-                        onClick={() => setSandboxRole("INVESTOR")}
+                        onClick={() => {
+                          setSandboxRole("INVESTOR");
+                          setActivePortalRole("INVESTOR");
+                        }}
                         className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
                           sandboxRole === "INVESTOR"
-                            ? "bg-amber-600 text-white shadow-sm"
+                            ? "bg-amber-600 text-white shadow-sm font-extrabold"
                             : "bg-white text-amber-900 border border-amber-200 hover:bg-amber-100/40"
                         }`}
                       >
                         Portail Investisseur (Fonds & Contrats)
                       </button>
                       <button
-                        onClick={() => setSandboxRole("DRIVER")}
+                        onClick={() => {
+                          setSandboxRole("DRIVER");
+                          setActivePortalRole("DRIVER");
+                        }}
                         className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
                           sandboxRole === "DRIVER"
-                            ? "bg-amber-600 text-white shadow-sm"
+                            ? "bg-amber-600 text-white shadow-sm font-extrabold"
                             : "bg-white text-amber-900 border border-amber-200 hover:bg-amber-100/40"
                         }`}
                       >
                         Portail Transporteur / Chauffeur
                       </button>
                       <button
-                        onClick={() => setSandboxRole("ADMIN")}
+                        onClick={() => {
+                          setSandboxRole("ADMIN");
+                          setActivePortalRole("ADMIN");
+                        }}
                         className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
                           sandboxRole === "ADMIN"
-                            ? "bg-amber-600 text-white shadow-sm"
+                            ? "bg-amber-600 text-white shadow-sm font-extrabold"
                             : "bg-white text-amber-900 border border-amber-200 hover:bg-amber-100/40"
                         }`}
                       >
@@ -824,6 +1138,8 @@ export default function App() {
                           initialProductId={pendingPurchase?.productId}
                           initialQuantity={pendingPurchase?.quantity}
                           initialTab={pendingPurchase ? "order" : undefined}
+                          externalCategory={catalogCategory}
+                          externalSearch={catalogSearch}
                         />
                       );
                     }
@@ -879,6 +1195,13 @@ export default function App() {
                           isLoading={isLoading}
                           rejectionReasons={rejectionReasons}
                           setRejectionReasons={setRejectionReasons}
+                          investmentProjects={investmentProjects}
+                          createInvestmentProject={createInvestmentProject}
+                          updateInvestmentProject={updateInvestmentProject}
+                          deleteInvestmentProject={deleteInvestmentProject}
+                          fetchInvestmentProjects={fetchInvestmentProjects}
+                          allProducts={products}
+                          fetchProducts={fetchProducts}
                         />
                       );
                     }
@@ -893,6 +1216,8 @@ export default function App() {
             )}
 
           </div>
+        )}
+          </>
         )}
 
       </main>
@@ -914,6 +1239,7 @@ export default function App() {
             setActivePortalRole("BUYER");
           }
         }}
+        onNavigate={navigateToRoute}
       />
 
       {/* EMAIL VERIFICATION MODAL */}
@@ -1020,202 +1346,6 @@ export default function App() {
         </div>
       )}
 
-      {/* GOOGLE SIGN-IN SELECTOR OVERLAY */}
-      {showGoogleSelector && googleSelectorCallback && (
-        <div className="fixed inset-0 bg-emerald-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden border border-emerald-100 shadow-2xl flex flex-col my-8 animate-scale-in text-slate-800">
-            {/* Modal Header */}
-            <div className="bg-emerald-950 text-white p-6 text-center relative border-b border-emerald-900">
-              {/* Back button */}
-              <button 
-                type="button"
-                onClick={() => {
-                  setShowGoogleSelector(false);
-                  setGoogleSelectorCallback(null);
-                  setIsAuthModalOpen(true);
-                }}
-                className="absolute top-4 left-4 px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-emerald-200 hover:text-white transition-all flex items-center space-x-1 text-xs font-bold cursor-pointer border border-white/10 shadow-sm"
-                title="Retour à la connexion"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Retour</span>
-              </button>
-
-              {/* Close button (Tab / Croix) */}
-              <button 
-                type="button"
-                onClick={() => {
-                  setShowGoogleSelector(false);
-                  setGoogleSelectorCallback(null);
-                  setIsAuthModalOpen(false);
-                }}
-                className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-rose-500/80 text-emerald-200 hover:text-white transition-all flex items-center justify-center cursor-pointer border border-white/10 shadow-sm"
-                title="Fermer la fenêtre"
-              >
-                <X className="w-4 h-4" />
-              </button>
-
-              <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-3 mt-2">
-                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#FFFFFF"/>
-                </svg>
-              </div>
-              <h3 className="font-extrabold text-lg">Connexion via Google</h3>
-              <p className="text-[10px] text-emerald-300 uppercase tracking-widest font-mono mt-1 font-bold">Authentification Sécurisée Firebase</p>
-            </div>
-
-            {/* Security Notice */}
-            <div className="p-4 bg-emerald-50 border-b border-emerald-100 text-emerald-900 text-[11px] leading-relaxed flex items-start space-x-2.5 font-medium">
-              <span className="text-sm mt-0.5">🔐</span>
-              <div>
-                <b>Connexion Rapide et Sécurisée :</b> Choisissez un compte Google pour vous connecter directement et accéder à vos services LGF's Mall en toute sécurité.
-              </div>
-            </div>
-
-            {/* Selector Options */}
-            <div className="p-6 space-y-4">
-              <span className="text-xs font-bold text-slate-500 block uppercase tracking-wide font-mono">Comptes Google Enregistrés :</span>
-              
-              <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                {/* Demo profile 2 */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    googleSelectorCallback({
-                      email: "koffi.togo@gmail.com",
-                      name: "Koffi Mensah",
-                      uid: "gg-buyer-koffi",
-                      role: "BUYER"
-                    });
-                  }}
-                  className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-emerald-500 hover:bg-emerald-50/30 transition-all flex items-center justify-between cursor-pointer group"
-                >
-                  <div className="pr-2">
-                    <p className="font-bold text-xs text-slate-800 group-hover:text-emerald-950">Koffi Mensah (Acheteur)</p>
-                    <p className="text-[10px] text-slate-500 font-mono">koffi.togo@gmail.com</p>
-                  </div>
-                  <span className="text-[9px] font-bold font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded uppercase flex-shrink-0">ACHETEUR</span>
-                </button>
-
-                {/* Demo profile 3 */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    googleSelectorCallback({
-                      email: "lawson.textiles@gmail.com",
-                      name: "Ets. Lawson (Wholesale)",
-                      uid: "gg-vendor-lawson",
-                      role: "VENDOR"
-                    });
-                  }}
-                  className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-emerald-500 hover:bg-emerald-50/30 transition-all flex items-center justify-between cursor-pointer group"
-                >
-                  <div className="pr-2">
-                    <p className="font-bold text-xs text-slate-800 group-hover:text-emerald-950">Ets. Lawson (Vendeur)</p>
-                    <p className="text-[10px] text-slate-500 font-mono">lawson.textiles@gmail.com</p>
-                  </div>
-                  <span className="text-[9px] font-bold font-mono bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded uppercase flex-shrink-0">VENDEUR</span>
-                </button>
-
-                {/* Demo profile 4 */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    googleSelectorCallback({
-                      email: "driver.kokou@gmail.com",
-                      name: "Kokou Delivery",
-                      uid: "gg-driver-kokou",
-                      role: "DRIVER"
-                    });
-                  }}
-                  className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-emerald-500 hover:bg-emerald-50/30 transition-all flex items-center justify-between cursor-pointer group"
-                >
-                  <div className="pr-2">
-                    <p className="font-bold text-xs text-slate-800 group-hover:text-emerald-950">Kokou Delivery (Livreur)</p>
-                    <p className="text-[10px] text-slate-500 font-mono">driver.kokou@gmail.com</p>
-                  </div>
-                  <span className="text-[9px] font-bold font-mono bg-purple-100 text-purple-800 px-2 py-0.5 rounded uppercase flex-shrink-0">LIVREUR</span>
-                </button>
-              </div>
-
-              {/* Custom Input */}
-              <div className="pt-4 border-t border-slate-100 space-y-3">
-                <span className="text-xs font-bold text-slate-400 block uppercase tracking-wide font-mono">Ou tester un compte Google personnalisé :</span>
-                
-                <div className="space-y-2.5">
-                  <input
-                    type="text"
-                    placeholder="Nom complet"
-                    value={googleCustomName}
-                    onChange={(e) => setGoogleCustomName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-semibold text-slate-800"
-                  />
-                  <input
-                    type="email"
-                    placeholder="adresse.google@gmail.com"
-                    value={googleCustomEmail}
-                    onChange={(e) => setGoogleCustomEmail(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-semibold text-slate-800 font-mono"
-                  />
-                  <div>
-                    <label className="text-[10px] uppercase font-bold tracking-widest text-emerald-800 mb-1.5 block font-mono">Rôle rattaché au compte</label>
-                    <select
-                      value={googleCustomRole}
-                      onChange={(e) => setGoogleCustomRole(e.target.value as UserRole)}
-                      className="w-full bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-semibold text-slate-800 cursor-pointer"
-                    >
-                      <option value="BUYER">Acheteur (Customer)</option>
-                      <option value="VENDOR">Vendeur (Vendor)</option>
-                      <option value="DRIVER">Livreur (Driver)</option>
-                      <option value="INVESTOR">Investisseur (Investor)</option>
-                    </select>
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={!googleCustomEmail}
-                    onClick={() => {
-                      googleSelectorCallback({
-                        email: googleCustomEmail,
-                        name: googleCustomName || googleCustomEmail.split("@")[0],
-                        uid: "gg-custom-" + Date.now(),
-                        role: googleCustomRole
-                      });
-                    }}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold py-3 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 shadow-md shadow-emerald-600/10 cursor-pointer"
-                  >
-                    <span>Simuler Google Sign-In</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Bottom return action */}
-              <div className="pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowGoogleSelector(false);
-                    setGoogleSelectorCallback(null);
-                    setIsAuthModalOpen(true);
-                  }}
-                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Retour au formulaire de connexion</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Footer info */}
-            <div className="bg-slate-50 p-4 text-center border-t border-slate-100">
-              <p className="text-[9px] text-slate-500 font-mono">
-                Statut SDK: {isFirebaseConfigured ? "🔥 CONNECTÉ À LA CLOUD FIRESTORE" : "💡 MODE SIMULATION LOCAL (DÉMO)"}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* CART DRAWER MODAL */}
       <CartDrawer
         isOpen={isCartDrawerOpen}
@@ -1243,17 +1373,15 @@ export default function App() {
           onClick={() => {
             setCurrentDashboardView("workspace");
             setCatalogCategory("Tous");
-            const catalogEl = document.getElementById("public-catalog");
-            if (catalogEl) {
-              catalogEl.scrollIntoView({ behavior: "smooth" });
-            } else {
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }
+            setCatalogSearch("");
+            window.scrollTo({ top: 0, behavior: "smooth" });
           }}
-          className="flex flex-col items-center justify-center space-y-1 text-emerald-300 hover:text-yellow-400 cursor-pointer py-1 px-2"
+          className={`flex flex-col items-center justify-center space-y-1 cursor-pointer py-1 px-2.5 transition-all duration-200 active:scale-95 ${
+            currentDashboardView === "workspace" ? "text-amber-400 font-extrabold scale-105" : "text-emerald-300/80 hover:text-amber-400"
+          }`}
         >
           <Home className="w-5 h-5" />
-          <span className="text-[10px] font-bold">Accueil</span>
+          <span className="text-[10px] font-bold tracking-tight">Accueil</span>
         </button>
 
         <button
@@ -1261,17 +1389,19 @@ export default function App() {
           aria-label="Catégories du catalogue"
           onClick={() => {
             setCurrentDashboardView("workspace");
-            const catalogEl = document.getElementById("public-catalog");
-            if (catalogEl) {
-              catalogEl.scrollIntoView({ behavior: "smooth" });
-            } else {
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }
+            setTimeout(() => {
+              const categoriesEl = document.getElementById("categories-grid-section") || document.getElementById("catalog-section") || document.getElementById("public-catalog");
+              if (categoriesEl) {
+                categoriesEl.scrollIntoView({ behavior: "smooth" });
+              } else {
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }
+            }, 50);
           }}
-          className="flex flex-col items-center justify-center space-y-1 text-emerald-300 hover:text-yellow-400 cursor-pointer py-1 px-2"
+          className="flex flex-col items-center justify-center space-y-1 text-emerald-300/80 hover:text-amber-400 active:scale-95 transition-all duration-200 cursor-pointer py-1 px-2.5"
         >
           <Grid className="w-5 h-5" />
-          <span className="text-[10px] font-bold">Catégories</span>
+          <span className="text-[10px] font-bold tracking-tight">Catégories</span>
         </button>
 
         <button
@@ -1281,8 +1411,8 @@ export default function App() {
             setCurrentDashboardView("live");
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
-          className={`flex flex-col items-center justify-center space-y-1 cursor-pointer py-1 px-2 relative ${
-            currentDashboardView === "live" ? "text-yellow-400" : "text-emerald-300 hover:text-yellow-400"
+          className={`flex flex-col items-center justify-center space-y-1 cursor-pointer py-1 px-2.5 relative transition-all duration-200 active:scale-95 ${
+            currentDashboardView === "live" ? "text-amber-400 font-extrabold scale-105" : "text-emerald-300/80 hover:text-amber-400"
           }`}
         >
           <div className="relative">
@@ -1290,24 +1420,26 @@ export default function App() {
             <span className="absolute -top-1 -right-1 w-2 h-2 bg-rose-500 rounded-full animate-ping"></span>
             <span className="absolute -top-1 -right-1 w-2 h-2 bg-rose-500 rounded-full"></span>
           </div>
-          <span className="text-[10px] font-bold">En Direct</span>
+          <span className="text-[10px] font-bold tracking-tight">En Direct</span>
         </button>
 
         <button
           type="button"
           aria-label={`Panier (${cart.reduce((a, c) => a + c.quantity, 0)} articles)`}
           onClick={() => setIsCartDrawerOpen(true)}
-          className="flex flex-col items-center justify-center space-y-1 text-emerald-300 hover:text-yellow-400 cursor-pointer py-1 px-2 relative"
+          className={`flex flex-col items-center justify-center space-y-1 cursor-pointer py-1 px-2.5 relative transition-all duration-200 active:scale-95 ${
+            isCartDrawerOpen ? "text-amber-400 font-extrabold" : "text-emerald-300/80 hover:text-amber-400"
+          }`}
         >
           <div className="relative">
             <ShoppingCart className="w-5 h-5" />
             {cart.length > 0 && (
-              <span className="absolute -top-1.5 -right-2 bg-yellow-500 text-emerald-950 font-mono text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
+              <span className="absolute -top-1.5 -right-2 bg-amber-400 text-emerald-950 font-mono text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-md animate-bounce">
                 {cart.reduce((a, c) => a + c.quantity, 0)}
               </span>
             )}
           </div>
-          <span className="text-[10px] font-bold">Panier</span>
+          <span className="text-[10px] font-bold tracking-tight">Panier</span>
         </button>
 
         <button
@@ -1315,25 +1447,26 @@ export default function App() {
           aria-label={user ? "Profil utilisateur" : "Connexion à votre compte"}
           onClick={() => {
             if (user) {
-              const dashEl = document.getElementById("user-dashboard");
-              if (dashEl) {
-                dashEl.scrollIntoView({ behavior: "smooth" });
-              } else {
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }
+              setCurrentDashboardView("workspace");
+              setTimeout(() => {
+                const dashEl = document.getElementById("user-dashboard");
+                if (dashEl) {
+                  dashEl.scrollIntoView({ behavior: "smooth" });
+                } else {
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }
+              }, 50);
             } else {
-              const authEl = document.getElementById("auth-console");
-              if (authEl) {
-                authEl.scrollIntoView({ behavior: "smooth" });
-              } else {
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }
+              setAuthMode("login");
+              setIsAuthModalOpen(true);
             }
           }}
-          className="flex flex-col items-center justify-center space-y-1 text-emerald-300 hover:text-yellow-400 cursor-pointer py-1 px-2"
+          className={`flex flex-col items-center justify-center space-y-1 cursor-pointer py-1 px-2.5 transition-all duration-200 active:scale-95 ${
+            isAuthModalOpen ? "text-amber-400 font-extrabold" : "text-emerald-300/80 hover:text-amber-400"
+          }`}
         >
           <User className="w-5 h-5" />
-          <span className="text-[10px] font-bold">{user ? "Profil" : "Connexion"}</span>
+          <span className="text-[10px] font-bold tracking-tight">{user ? "Profil" : "Connexion"}</span>
         </button>
       </nav>
 
@@ -1371,6 +1504,9 @@ export default function App() {
         buyerOrders={buyerOrders}
         formatCurrency={formatCurrency}
       />
+
+      {/* Floating Gemini AI Assistant & FAQ Widget */}
+      <GeminiAssistantWidget />
 
     </div>
   );

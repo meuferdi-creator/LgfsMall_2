@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Wallet, ShoppingBag, Plus, Clock, Coins, Edit, Trash, AlertCircle, MapPin, Navigation, Save, ShieldCheck, CheckCircle2, BarChart3, Star, Sparkles, Upload, Download, Calculator, Volume2, VolumeX, Bell, X, KeyRound, Lock } from "lucide-react";
+import { Wallet, ShoppingBag, Plus, Clock, Coins, Edit, Trash, AlertCircle, MapPin, Navigation, Save, ShieldCheck, CheckCircle2, BarChart3, Star, Sparkles, Upload, Download, Calculator, Volume2, VolumeX, Bell, X, KeyRound, Lock, Tag, Copy, Check, Calendar, Percent } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { User, Product, Order } from "../types";
+import { User, Product, Order, Coupon } from "../types";
 import { getGoogleMaps, TOGO_HUBS, calculateRoute } from "../lib/maps";
 import { firestoreSync, auth } from "../lib/firebase";
 import ProductImageUploader from "./ProductImageUploader";
@@ -12,8 +12,8 @@ interface VendorPortalProps {
   user: User;
   vendorProducts: Product[];
   vendorOrders: Order[];
-  createProduct: (data: { title: string; description: string; price: number; wholesalePrice?: number; wholesaleMinQty?: number; image?: string; images?: string[]; category: string; stock: number }) => Promise<boolean>;
-  updateProduct: (id: string, data: { title?: string; description?: string; price?: number; wholesalePrice?: number; wholesaleMinQty?: number; image?: string; images?: string[]; category?: string; stock?: number }) => Promise<boolean>;
+  createProduct: (data: { title: string; description: string; price: number; wholesalePrice?: number; wholesaleMinQty?: number; image?: string; images?: string[]; variants?: any; category: string; stock: number }) => Promise<boolean>;
+  updateProduct: (id: string, data: { title?: string; description?: string; price?: number; wholesalePrice?: number; wholesaleMinQty?: number; image?: string; images?: string[]; variants?: any; category?: string; stock?: number }) => Promise<boolean>;
   deleteProduct: (id: string) => Promise<boolean>;
   withdrawEscrowFunds: (data: { method: string; accountNumber: string }) => Promise<boolean>;
   fetchStats: () => Promise<void>;
@@ -35,7 +35,7 @@ export default function VendorPortal({
   isLoading,
   fetchVendorOrders
 }: VendorPortalProps) {
-  const [vendorTab, setVendorTab] = useState<"articles" | "form" | "sales" | "escrow" | "profil" | "analytics" | "reviews" | "calculator">("articles");
+  const [vendorTab, setVendorTab] = useState<"articles" | "form" | "sales" | "escrow" | "profil" | "analytics" | "reviews" | "calculator" | "promos">("articles");
   const [dispatchOtp, setDispatchOtp] = useState<{ [orderId: string]: string }>({});
 
   // Sound and Toast Notifications State
@@ -330,7 +330,7 @@ export default function VendorPortal({
 
   const handleDispatch = async (orderId: string) => {
     try {
-      const token = localStorage.getItem("lgf_mall_token");
+      const token = localStorage.getItem("lgf_token");
       const res = await fetch(`/api/orders/${orderId}/dispatch`, {
         method: "POST",
         headers: {
@@ -363,37 +363,64 @@ export default function VendorPortal({
   const [prodImages, setProdImages] = useState<string[]>([]);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
+  // Colors & Variants states
+  const [hasVariants, setHasVariants] = useState(false);
+  const [priceType, setPriceType] = useState<"SAME" | "DIFFERENT">("SAME");
+  const [prodVariants, setProdVariants] = useState<{ color: string; price: string }[]>([
+    { color: "", price: "" }
+  ]);
+  const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
+
   // Withdrawal states
   const [withdrawMethod, setWithdrawMethod] = useState("TMoney");
   const [withdrawAccount, setWithdrawAccount] = useState("");
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const primaryImg = prodImages.length > 0
-      ? prodImages[0]
-      : (prodImage || "https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=600&auto=format&fit=crop");
+    if (isSubmittingProduct) return;
 
-    const payload = {
-      title: prodTitle,
-      description: prodDesc,
-      price: parseFloat(prodPrice),
-      wholesalePrice: prodWholesalePrice ? parseFloat(prodWholesalePrice) : undefined,
-      wholesaleMinQty: prodWholesaleMinQty ? parseInt(prodWholesaleMinQty) : undefined,
-      stock: parseInt(prodStock),
-      category: prodCategory,
-      image: primaryImg,
-      images: prodImages
-    };
+    setIsSubmittingProduct(true);
+    try {
+      const primaryImg = prodImages.length > 0
+        ? prodImages[0]
+        : (prodImage || "https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=600&auto=format&fit=crop");
 
-    let ok;
-    if (editingProductId) {
-      ok = await updateProduct(editingProductId, payload);
-    } else {
-      ok = await createProduct(payload);
-    }
+      let variantsToSave: { color: string; price?: number }[] | undefined = undefined;
+      if (hasVariants) {
+        const validVariants = prodVariants.filter((v) => v.color.trim() !== "");
+        if (validVariants.length > 0) {
+          variantsToSave = validVariants.map((v) => ({
+            color: v.color.trim(),
+            price: priceType === "DIFFERENT" && v.price ? parseFloat(v.price) : parseFloat(prodPrice)
+          }));
+        }
+      }
 
-    if (ok) {
-      setVendorTab("articles");
+      const payload = {
+        title: prodTitle,
+        description: prodDesc,
+        price: parseFloat(prodPrice),
+        wholesalePrice: prodWholesalePrice ? parseFloat(prodWholesalePrice) : undefined,
+        wholesaleMinQty: prodWholesaleMinQty ? parseInt(prodWholesaleMinQty) : undefined,
+        stock: parseInt(prodStock),
+        category: prodCategory,
+        image: primaryImg,
+        images: prodImages,
+        variants: variantsToSave
+      };
+
+      let ok;
+      if (editingProductId) {
+        ok = await updateProduct(editingProductId, payload);
+      } else {
+        ok = await createProduct(payload);
+      }
+
+      if (ok) {
+        setVendorTab("articles");
+      }
+    } finally {
+      setIsSubmittingProduct(false);
     }
   };
 
@@ -611,6 +638,30 @@ export default function VendorPortal({
     setProdImage(p.image || "");
     const initialImgs = p.images && p.images.length > 0 ? p.images : (p.image ? [p.image] : []);
     setProdImages(initialImgs);
+
+    let existingVariants: { color: string; price: string }[] = [];
+    if (p.variants) {
+      let parsed = typeof p.variants === "string" ? JSON.parse(p.variants) : p.variants;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setHasVariants(true);
+        existingVariants = parsed.map((v: any) => ({
+          color: v.color || v.name || "",
+          price: v.price ? v.price.toString() : ""
+        }));
+        const hasDiff = existingVariants.some((v) => v.price && v.price !== p.price.toString());
+        setPriceType(hasDiff ? "DIFFERENT" : "SAME");
+      } else {
+        setHasVariants(false);
+        setPriceType("SAME");
+        existingVariants = [{ color: "", price: "" }];
+      }
+    } else {
+      setHasVariants(false);
+      setPriceType("SAME");
+      existingVariants = [{ color: "", price: "" }];
+    }
+    setProdVariants(existingVariants);
+
     setVendorTab("form");
   };
 
@@ -625,6 +676,9 @@ export default function VendorPortal({
     setProdCategory("Mode & Textiles");
     setProdImage("");
     setProdImages([]);
+    setHasVariants(false);
+    setPriceType("SAME");
+    setProdVariants([{ color: "", price: "" }]);
     setVendorTab("form");
   };
 
@@ -1076,6 +1130,107 @@ export default function VendorPortal({
               </div>
             </div>
 
+            {/* Colors & Variants Section */}
+            <div className="p-4 bg-emerald-50/60 rounded-2xl border border-emerald-100 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="hasVariantsToggle"
+                    checked={hasVariants}
+                    onChange={(e) => setHasVariants(e.target.checked)}
+                    className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
+                  />
+                  <label htmlFor="hasVariantsToggle" className="text-xs font-bold text-emerald-950 cursor-pointer">
+                    Cet article est disponible en plusieurs couleurs / modèles
+                  </label>
+                </div>
+              </div>
+
+              {hasVariants && (
+                <div className="space-y-3 pt-2 border-t border-emerald-100">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-emerald-700 uppercase block font-mono">Structure de prix :</label>
+                    <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-emerald-900">
+                      <label className="flex items-center space-x-1.5 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="priceType"
+                          value="SAME"
+                          checked={priceType === "SAME"}
+                          onChange={() => setPriceType("SAME")}
+                          className="text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>Même prix pour toutes les couleurs ({prodPrice || "0"} FCFA)</span>
+                      </label>
+                      <label className="flex items-center space-x-1.5 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="priceType"
+                          value="DIFFERENT"
+                          checked={priceType === "DIFFERENT"}
+                          onChange={() => setPriceType("DIFFERENT")}
+                          className="text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>Prix différent selon la couleur</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-emerald-700 uppercase block font-mono">Couleurs / Variantes disponibles :</label>
+                    {prodVariants.map((v, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={v.color}
+                          onChange={(e) => {
+                            const updated = [...prodVariants];
+                            updated[idx].color = e.target.value;
+                            setProdVariants(updated);
+                          }}
+                          placeholder="ex: Blanc, Bleu, Rose, Gris..."
+                          className="flex-1 bg-white border border-emerald-200 px-3 py-1.5 rounded-xl text-xs text-emerald-950 focus:outline-none font-medium"
+                        />
+                        {priceType === "DIFFERENT" && (
+                          <input
+                            type="number"
+                            value={v.price}
+                            onChange={(e) => {
+                              const updated = [...prodVariants];
+                              updated[idx].price = e.target.value;
+                              setProdVariants(updated);
+                            }}
+                            placeholder={`Prix (ex: ${prodPrice || "4900"})`}
+                            className="w-32 bg-white border border-emerald-200 px-3 py-1.5 rounded-xl text-xs text-emerald-950 focus:outline-none font-mono"
+                          />
+                        )}
+                        {prodVariants.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setProdVariants(prodVariants.filter((_, i) => i !== idx))}
+                            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg cursor-pointer"
+                            title="Supprimer cette couleur"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={() => setProdVariants([...prodVariants, { color: "", price: prodPrice }])}
+                      className="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center space-x-1 pt-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Ajouter une couleur</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div>
               <ProductImageUploader
                 images={prodImages}
@@ -1094,15 +1249,18 @@ export default function VendorPortal({
               <button
                 type="button"
                 onClick={() => setVendorTab("articles")}
-                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3 rounded-xl text-xs cursor-pointer"
+                disabled={isSubmittingProduct}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3 rounded-xl text-xs cursor-pointer disabled:opacity-50"
               >
                 Annuler
               </button>
               <button
                 type="submit"
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs shadow-md shadow-emerald-600/10 cursor-pointer"
+                disabled={isSubmittingProduct}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs shadow-md shadow-emerald-600/10 cursor-pointer disabled:opacity-50 flex items-center justify-center space-x-2"
               >
-                {editingProductId ? "Enregistrer les modifications" : "Publier l'Article"}
+                {isSubmittingProduct && <Clock className="w-4 h-4 animate-spin" />}
+                <span>{editingProductId ? "Enregistrer les modifications" : "Publier l'Article"}</span>
               </button>
             </div>
           </form>

@@ -28,13 +28,18 @@ import {
 } from "lucide-react";
 import { Product } from "../types";
 import ProductCard from "./ProductCard";
+import { useAppStore } from "../store";
+import { translations } from "../translations";
+import { isCategoryMatch } from "../utils/categoryMatcher";
+import { getOptimizedImageUrl } from "../utils/imageOptimizer";
 
 interface HomePageSectionsProps {
   products: Product[];
   formatCurrency: (amount: number) => string;
   onSelectCategory: (category: string) => void;
-  onBuyProduct: (productId: string, quantity: number) => void;
+  onBuyProduct: (productId: string, quantity: number, color?: string) => void;
   onOpenDetail?: (product: Product) => void;
+  onOpenStore?: (vendorId: string, storeName: string) => void;
 }
 
 const CATEGORY_ITEMS = [
@@ -57,7 +62,7 @@ const STORES = [
   { id: "s2", name: "Atelier Kpalimé", category: "Artisanat & Sculptures", location: "Kpalimé • Centre", rating: 4.8, image: "https://images.unsplash.com/photo-1590736704728-f4730bb30770?auto=format&fit=crop&w=400&q=80" },
   { id: "s3", name: "Kara Electronics", category: "Smartphones & TV", location: "Kara • Grand Marché", rating: 4.7, image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=400&q=80" },
   { id: "s4", name: "Sokodé Agricole", category: "Produits Vivriers & Épicerie", location: "Sokodé • Commercial", rating: 4.9, image: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=400&q=80" },
-  { id: "s5", name: "LGF's Mall Officiel", category: "Boutique Certifiée LGF", location: "Lomé • Blvd Mono", rating: 5.0, image: "https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=400&q=80" }
+  { id: "s5", name: "LGF's Mall", category: "Boutique Certifiée LGF", location: "Lomé • Blvd Mono", rating: 5.0, image: "https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=400&q=80" }
 ];
 
 const POPULAR_BRANDS = [
@@ -76,8 +81,11 @@ export default function HomePageSections({
   formatCurrency,
   onSelectCategory,
   onBuyProduct,
-  onOpenDetail
+  onOpenDetail,
+  onOpenStore
 }: HomePageSectionsProps) {
+  const { lang } = useAppStore();
+  const t = translations[lang] || translations.FR;
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const handleCopyCode = (code: string) => {
@@ -94,7 +102,7 @@ export default function HomePageSections({
     <div className="high-contrast-fix space-y-12 my-8">
       
       {/* 1. ACHETER PAR CATÉGORIE GRID */}
-      <section className="space-y-6">
+      <section id="categories-grid-section" className="space-y-6 scroll-mt-24">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white font-display tracking-tight">
@@ -109,9 +117,11 @@ export default function HomePageSections({
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5">
           {CATEGORY_ITEMS.map((cat) => {
             const Icon = cat.icon;
+            const matchingCount = products.filter((p) => isCategoryMatch(p.category, cat.id)).length;
             return (
               <button
                 key={cat.id}
+                type="button"
                 onClick={() => onSelectCategory(cat.id)}
                 className="bg-white dark:bg-emerald-900/50 p-4 rounded-2xl border border-slate-200/80 dark:border-emerald-800/60 shadow-sm hover:shadow-md hover:border-emerald-500/50 transition-all text-left flex flex-col justify-between space-y-3 cursor-pointer group"
               >
@@ -123,7 +133,7 @@ export default function HomePageSections({
                     {cat.label}
                   </h4>
                   <span className="text-[10px] text-slate-400 dark:text-emerald-300/80 font-mono block mt-0.5 font-medium">
-                    {cat.count}
+                    {matchingCount} produit{matchingCount > 1 ? "s" : ""}
                   </span>
                 </div>
               </button>
@@ -135,47 +145,47 @@ export default function HomePageSections({
       {/* 2. FEATURE ACTION BANNERS */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
         
-        <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 text-white p-6 rounded-2xl shadow-md border border-emerald-500/30 space-y-3 flex flex-col justify-between">
+        <div className="bg-emerald-700 bg-linear-to-br from-emerald-600 to-emerald-800 text-white p-6 rounded-2xl shadow-md border border-emerald-500/30 space-y-3 flex flex-col justify-between">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shrink-0">
-              <ShieldCheck className="w-5 h-5" />
+              <ShieldCheck className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h4 className="text-sm font-bold">Paiement Mobile Money</h4>
-              <p className="text-[11px] text-emerald-100">Moov Money, MTN, Mixx Yas</p>
+              <h4 className="text-sm font-bold text-white">Paiement Mobile Money</h4>
+              <p className="text-[11px] text-emerald-100 font-medium">Moov Money, MTN, Mixx Yas</p>
             </div>
           </div>
-          <p className="text-xs text-emerald-50/90 leading-relaxed">
+          <p className="text-xs text-white/90 leading-relaxed font-medium">
             Réglez vos achats en un instant par code USSD ou QR Code. Séquestre LGF garantit votre argent.
           </p>
         </div>
 
-        <div className="bg-gradient-to-br from-amber-500 to-amber-700 text-white p-6 rounded-2xl shadow-md border border-amber-400/30 space-y-3 flex flex-col justify-between">
+        <div className="bg-amber-600 bg-linear-to-br from-amber-500 to-amber-700 text-white p-6 rounded-2xl shadow-md border border-amber-400/30 space-y-3 flex flex-col justify-between">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shrink-0">
-              <Truck className="w-5 h-5" />
+              <Truck className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h4 className="text-sm font-bold">Livraison express à Lomé</h4>
-              <p className="text-[11px] text-amber-100">Expédition sous 24h chrono</p>
+              <h4 className="text-sm font-bold text-white">Livraison express à Lomé</h4>
+              <p className="text-[11px] text-amber-100 font-medium">Expédition sous 24h chrono</p>
             </div>
           </div>
-          <p className="text-xs text-amber-50/90 leading-relaxed">
+          <p className="text-xs text-white/90 leading-relaxed font-medium">
             Livraison à domicile ou en point relais dans tout le Togo et la sous-région UEMOA.
           </p>
         </div>
 
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 text-white p-6 rounded-2xl shadow-md border border-slate-700 space-y-3 flex flex-col justify-between">
+        <div className="bg-slate-900 bg-linear-to-br from-slate-800 to-slate-950 text-white p-6 rounded-2xl shadow-md border border-slate-700 space-y-3 flex flex-col justify-between">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shrink-0">
-              <Palette className="w-5 h-5" />
+              <Palette className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h4 className="text-sm font-bold">Artisanat local</h4>
-              <p className="text-[11px] text-slate-300">Kpalimé, Sokodé, Dapaong</p>
+              <h4 className="text-sm font-bold text-white">Artisanat local</h4>
+              <p className="text-[11px] text-slate-200 font-medium">Kpalimé, Sokodé, Dapaong</p>
             </div>
           </div>
-          <p className="text-xs text-slate-200/90 leading-relaxed">
+          <p className="text-xs text-white/90 leading-relaxed font-medium">
             Soutenez le savoir-faire africain et achetez directement auprès de nos créateurs locaux.
           </p>
         </div>
@@ -204,6 +214,7 @@ export default function HomePageSections({
               formatCurrency={formatCurrency}
               onBuy={onBuyProduct}
               onOpenDetail={onOpenDetail}
+              onOpenStore={onOpenStore}
             />
           ))}
         </div>
@@ -280,6 +291,7 @@ export default function HomePageSections({
               formatCurrency={formatCurrency}
               onBuy={onBuyProduct}
               onOpenDetail={onOpenDetail}
+              onOpenStore={onOpenStore}
             />
           ))}
         </div>
@@ -300,25 +312,36 @@ export default function HomePageSections({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          {STORES.map((st) => (
-            <div 
-              key={st.id}
-              className="bg-white dark:bg-emerald-900/50 rounded-2xl p-4 border border-slate-200/80 dark:border-emerald-800/60 shadow-sm hover:shadow-md transition-all space-y-3"
-            >
-              <img src={st.image} alt={st.name} referrerPolicy="no-referrer" className="w-full h-28 object-cover rounded-xl" />
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">{st.name}</h4>
-                  <div className="flex items-center text-[10px] text-amber-500 font-bold">
-                    <Star className="w-3 h-3 fill-amber-400 text-amber-400 mr-0.5" />
-                    <span>{st.rating}</span>
+          {STORES.map((st) => {
+            const matchingProduct = products.find(
+              (p) => p.vendor?.name?.toLowerCase() === st.name.toLowerCase() || p.vendorId === st.id
+            );
+            return (
+              <button
+                key={st.id}
+                type="button"
+                onClick={() => {
+                  if (onOpenStore) {
+                    onOpenStore(matchingProduct?.vendorId || st.id, st.name);
+                  }
+                }}
+                className="bg-white dark:bg-emerald-900/50 rounded-2xl p-4 border border-slate-200/80 dark:border-emerald-800/60 shadow-sm hover:shadow-md hover:border-emerald-500/80 transition-all space-y-3 text-left cursor-pointer group w-full"
+              >
+                <img src={getOptimizedImageUrl(st.image, 400, 70)} alt={st.name} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="w-full h-28 object-cover rounded-xl group-hover:scale-[1.02] transition-transform" />
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{st.name}</h4>
+                    <div className="flex items-center text-[10px] text-amber-500 font-bold">
+                      <Star className="w-3 h-3 fill-amber-400 text-amber-400 mr-0.5" />
+                      <span>{st.rating}</span>
+                    </div>
                   </div>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold block">{st.category}</span>
+                  <span className="text-[10px] text-slate-400 dark:text-emerald-300/80 font-medium block">{st.location}</span>
                 </div>
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold block">{st.category}</span>
-                <span className="text-[10px] text-slate-400 dark:text-emerald-300/80 font-medium block">{st.location}</span>
-              </div>
-            </div>
-          ))}
+              </button>
+            );
+          })}
         </div>
       </section>
 

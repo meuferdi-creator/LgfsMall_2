@@ -23,7 +23,28 @@ export const translations = {
     errorOccurred: "Une erreur est survenue.",
     submitting: "Traitement en cours...",
     welcomeBack: "Bienvenue à nouveau,",
-    
+
+    // Header & Nav
+    searchPlaceholder: "Rechercher un produit, une marque, une boutique...",
+    searchBtn: "Rechercher",
+    allCategories: "Toutes les catégories",
+    flashDeals: "Ventes Flash",
+    sellOnLgf: "Vendre sur LGF",
+    trackOrder: "Suivre ma commande",
+    myCart: "Mon Panier",
+    myAccount: "Mon Compte",
+    welcomeTicker: "🌿 Bienvenue sur LGF's Mall — Le Marché Africain de Confiance !",
+    becomeVendorTicker: "Devenez Vendeur Marchand — 0 FCFA Frais d'Inscription",
+    promoTicker: "Code Promo -10% : LGF10",
+    freeDeliveryTicker: "Livraison Offerte partout au Togo dès 25 000 FCFA",
+    officialStore: "LGF's Mall",
+    verifiedShop: "Boutique Certifiée LGF",
+    buyerSpace: "Espace Acheteur",
+    vendorSpace: "Espace Vendeur",
+    driverSpace: "Espace Livreur",
+    adminSpace: "Espace Administrateur",
+    investorSpace: "Espace Investisseur",
+
     // E-commerce & Checkout
     addToCart: "Ajouter au panier",
     buyNow: "Acheter avec Escrow",
@@ -34,6 +55,29 @@ export const translations = {
     emptyCart: "Votre panier est vide",
     wholesalePrice: "Prix de Gros",
     filterPrice: "Filtre Prix (FCFA)",
+    searchCatalog: "Rechercher dans le catalogue...",
+    allProducts: "Tous les produits",
+    noProducts: "Aucun produit trouvé.",
+    unitPrice: "Prix unitaire",
+    inStock: "En stock",
+    outOfStock: "Rupture de stock",
+    viewDetails: "Voir détails",
+    certifiedMerchant: "Marchand Certifié LGF",
+    reviews: "Avis vérifiés",
+
+    // Home & Marketing
+    heroTitle: "Le Marché Digital d'Assigamé & d'Afrique de l'Ouest",
+    heroSubtitle: "Achetez et vendez en toute sécurité avec garantie par séquestre mobile money (TMoney, Flooz) & carte bancaire.",
+    exploreCatalog: "Explorer le Catalogue",
+    topStores: "Boutiques Partenaires à la Une",
+    whyChooseUs: "Pourquoi Choisir LGF's Mall ?",
+    securePayments: "Paiements 100% Sécurisés",
+    fastDelivery: "Livraison Rapide & Suivie",
+    escrowProtection: "Garantie Anti-Fraude Escrow",
+    customerSupport: "Assistance Clientèle 24/7",
+    newsletterTitle: "Restez informé des meilleures offres",
+    newsletterSubtitle: "Recevez les codes promos et nouveaux arrivages directement par email.",
+    subscribe: "S'abonner",
 
     // KYC & Verification
     kycStatus: "Statut de vérification KYC",
@@ -72,6 +116,7 @@ export const translations = {
     supportContact: "Assistance Téléphonique LGF :",
     securedByEscrow: "Transactions 100% sécurisées par système de séquestre de fonds mobile money (TMoney, Flooz) & carte."
   },
+
   EN: {
     appName: "LGF's Mall",
     tagline: "The Reference Multi-Vendor Marketplace in Togo & Africa",
@@ -95,6 +140,27 @@ export const translations = {
     submitting: "Processing...",
     welcomeBack: "Welcome back,",
 
+    // Header & Nav
+    searchPlaceholder: "Search for a product, brand, shop...",
+    searchBtn: "Search",
+    allCategories: "All Categories",
+    flashDeals: "Flash Deals",
+    sellOnLgf: "Sell on LGF",
+    trackOrder: "Track My Order",
+    myCart: "My Cart",
+    myAccount: "My Account",
+    welcomeTicker: "🌿 Welcome to LGF's Mall — The Trusted African Marketplace!",
+    becomeVendorTicker: "Become a Merchant Seller — 0 FCFA Registration Fee",
+    promoTicker: "Promo Code -10%: LGF10",
+    freeDeliveryTicker: "Free Shipping across Togo from 25,000 FCFA",
+    officialStore: "LGF's Mall",
+    verifiedShop: "LGF Certified Shop",
+    buyerSpace: "Buyer Space",
+    vendorSpace: "Vendor Space",
+    driverSpace: "Driver Space",
+    adminSpace: "Admin Space",
+    investorSpace: "Investor Space",
+
     // E-commerce & Checkout
     addToCart: "Add to Cart",
     buyNow: "Buy with Escrow",
@@ -105,6 +171,29 @@ export const translations = {
     emptyCart: "Your cart is empty",
     wholesalePrice: "Wholesale Price",
     filterPrice: "Price Filter (FCFA)",
+    searchCatalog: "Search in catalog...",
+    allProducts: "All products",
+    noProducts: "No products found.",
+    unitPrice: "Unit price",
+    inStock: "In stock",
+    outOfStock: "Out of stock",
+    viewDetails: "View details",
+    certifiedMerchant: "LGF Certified Merchant",
+    reviews: "Verified reviews",
+
+    // Home & Marketing
+    heroTitle: "Digital Marketplace of Assigamé & West Africa",
+    heroSubtitle: "Buy and sell safely with mobile money (TMoney, Flooz) & bank card escrow protection.",
+    exploreCatalog: "Explore Catalog",
+    topStores: "Featured Partner Shops",
+    whyChooseUs: "Why Choose LGF's Mall?",
+    securePayments: "100% Secure Payments",
+    fastDelivery: "Fast & Tracked Delivery",
+    escrowProtection: "Escrow Anti-Fraud Guarantee",
+    customerSupport: "24/7 Customer Support",
+    newsletterTitle: "Stay updated with best deals",
+    newsletterSubtitle: "Receive discount codes and new arrivals directly in your inbox.",
+    subscribe: "Subscribe",
 
     // KYC & Verification
     kycStatus: "KYC Verification Status",
@@ -143,6 +232,7 @@ export const translations = {
     supportContact: "LGF Telephone Support:",
     securedByEscrow: "Transactions 100% secured via mobile money (TMoney, Flooz) & card escrow systems."
   },
+
   EWE: {
     appName: "LGF's Mall",
     tagline: "Mía tɔ, mía tɔ - Togo ƒe asitrala gã si le kpekpeɖeŋu nam",
@@ -166,6 +256,27 @@ export const translations = {
     submitting: "Le dɔ wɔm...",
     welcomeBack: "Woezor gbegbe,",
 
+    // Header & Nav
+    searchPlaceholder: "Dii le asisikpɔ me (Di nu, dɔwɔƒe)...",
+    searchBtn: "Dii",
+    allCategories: "Akatogowo katã",
+    flashDeals: "Asisi Kaba (Flash Deals)",
+    sellOnLgf: "Dzra nu le LGF",
+    trackOrder: "Kpɔ wò dɔa ƒe mɔ",
+    myCart: "Mye Panier",
+    myAccount: "Mye Akɔntu",
+    welcomeTicker: "🌿 Woezor ɖe LGF's Mall — Mía tɔ, Togo ƒe asitrala gã!",
+    becomeVendorTicker: "Zu Asitsala — 0 FCFA Kŋu-ŋlɔ-fe",
+    promoTicker: "Code Promo -10% : LGF10",
+    freeDeliveryTicker: "Lɔlɔ̃ nu xoxoe kple dɔɖoɖo faa tso 25 000 FCFA",
+    officialStore: "LGF's Mall",
+    verifiedShop: "Fiase Nyuitɔ LGF",
+    buyerSpace: "Asiflela-ƒe",
+    vendorSpace: "Asitsala-ƒe",
+    driverSpace: "Lòɖodola-ƒe",
+    adminSpace: "Dzikpola-ƒe",
+    investorSpace: "Gafola-ƒe",
+
     // E-commerce & Checkout
     addToCart: "Da ɖe akpa me (Add to Cart)",
     buyNow: "Fle kple Escrow",
@@ -176,6 +287,29 @@ export const translations = {
     emptyCart: "Wò akpa me le ƒu",
     wholesalePrice: "Asi gã (Wholesale)",
     filterPrice: "Asi ɖoɖo (FCFA)",
+    searchCatalog: "Di nusiwo le catalogue me...",
+    allProducts: "Nuwo katã",
+    noProducts: "Aɖeke mele afisia o.",
+    unitPrice: "Asi ɖeka",
+    inStock: "Nu le asime",
+    outOfStock: "Nu vɔ",
+    viewDetails: "Kpɔ eƒe nutowom",
+    certifiedMerchant: "Asitsala Nyuitɔ LGF",
+    reviews: "Kakaɖedzi nyawo",
+
+    // Home & Marketing
+    heroTitle: "Assigamé kple West Africa ƒe Asitrala Gã",
+    heroSubtitle: "Fle eye dzra nu kple dedienu kple Escrow (TMoney, Flooz, Carte).",
+    exploreCatalog: "Kpɔ Nuwo Katã",
+    topStores: "Fiase Nyuitɔwo",
+    whyChooseUs: "Nukata LGF's Mall?",
+    securePayments: "Gafexe Dedienu 100%",
+    fastDelivery: "Dɔɖoɖo Kaba & Dedienu",
+    escrowProtection: "Escrow Dzadzraɖo",
+    customerSupport: "Kpekpeɖeŋu Gbesiagbe 24/7",
+    newsletterTitle: "Xɔ nyabiase kple asi fafɛwo kaba",
+    newsletterSubtitle: "Xɔ code promo kple nu yeyewo le email me.",
+    subscribe: "Ŋlɔ ŋkɔ",
 
     // KYC & Verification
     kycStatus: "KYC Nuŋlɔɖi Kakaɖedzi",
@@ -214,6 +348,7 @@ export const translations = {
     supportContact: "LGF Kaƒomadzi Kpekpeɖeŋu :",
     securedByEscrow: "Seke ga xexe kple mobile money (TMoney, Flooz) sɔgbɔ le kpekpeɖeŋu me."
   },
+
   KABYE: {
     appName: "LGF's Mall",
     tagline: "Tɔgɔ tɛ kɩyakʊ gʊsɔɔʊ kpeekpe kɛ Afrika taa",
@@ -237,6 +372,27 @@ export const translations = {
     submitting: "Tʊmɩyɛ wɛɛ kpem...",
     welcomeBack: "Lezʊʊ kɔɔ loba kpem,",
 
+    // Header & Nav
+    searchPlaceholder: "Cɔna yaa baŋa wondu hɩɖɛ...",
+    searchBtn: "Cɔna",
+    allCategories: "Hɩla kpeekpe",
+    flashDeals: "Lɔŋ Lɔŋ Pɛdʊʊ",
+    sellOnLgf: "Pɛdɩ LGF yɔɔ",
+    trackOrder: "Tiya wò tiyeto nʊmɔʊ",
+    myCart: "Mɔn Pɔtɔɔ",
+    myAccount: "Mɔn Akɔntu",
+    welcomeTicker: "🌿 Lezʊʊ kɔɔ LGF's Mall — Tɔgɔ tɛ kɩyakʊ gʊsɔɔʊ!",
+    becomeVendorTicker: "Pisi Pɛdʊʊ tʊ — 0 FCFA Masʊʊ liidiye",
+    promoTicker: "Code Promo -10%: LGF10",
+    freeDeliveryTicker: "Tiyeto fɛyɩ liidiye Tɔgɔ taa kpaɣ 25 000 FCFA",
+    officialStore: "LGF's Mall",
+    verifiedShop: "LGF Pɛdʊʊ kɩbanɖɛ",
+    buyerSpace: "Yabʊ-tʊ tɛ",
+    vendorSpace: "Pɛdʊʊ-tʊ tɛ",
+    driverSpace: "Kɔŋgʊʊ-tʊ tɛ",
+    adminSpace: "Admin tɛ",
+    investorSpace: "Gafola tɛ",
+
     // E-commerce & Checkout
     addToCart: "Sʊzɩ pɔtɔɔ taa (Add to Cart)",
     buyNow: "Yabɩ nɛ Escrow",
@@ -247,6 +403,29 @@ export const translations = {
     emptyCart: "Pɔtɔɔ fɛyɩ pʊyʊ",
     wholesalePrice: "Yabʊ gã asi",
     filterPrice: "Liidiye lɩzʊʊ (FCFA)",
+    searchCatalog: "Cɔna catalog taa...",
+    allProducts: "Wondu kpeekpe",
+    noProducts: "Wondu fɛyɩ afima.",
+    unitPrice: "Kʊɖumm asi",
+    inStock: "Wondu wɛɛ",
+    outOfStock: "Wondu tɛzɩ",
+    viewDetails: "Na e-tɔm",
+    certifiedMerchant: "LGF Pɛdʊʊ tʊ kɩbanɖʊ",
+    reviews: "Avis masʊʊ",
+
+    // Home & Marketing
+    heroTitle: "Assigamé nɛ Afrika Kɩyakʊ Digitale",
+    heroSubtitle: "Yabɩ nɛ pɛdɩ nɛ kɩbanɖʊʊ yɔɔ Escrow (TMoney, Flooz, Carte).",
+    exploreCatalog: "Na Wondu Kpeekpe",
+    topStores: "Pɛdʊʊ Waa Kɩbanba",
+    whyChooseUs: "Bʊyɔɔ LGF's Mall?",
+    securePayments: "Hɛɛʊ Kɩbanɖʊʊ 100%",
+    fastDelivery: "Lɔŋ Lɔŋ Tiyeto",
+    escrowProtection: "Escrow Kandayʊʊ",
+    customerSupport: "Kpekpeɖeŋu Wɛɛ 24/7",
+    newsletterTitle: "Mʊ tɔm kɩbandʊ lɔŋ",
+    newsletterSubtitle: "Mʊ code promo nɛ wondu kɩfatʊ email taa.",
+    subscribe: "Maa hɩɖɛ",
 
     // KYC & Verification
     kycStatus: "KYC hɩɖɛ masʊʊ tʊmɩyɛ",

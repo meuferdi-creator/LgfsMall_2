@@ -1,25 +1,31 @@
 import React, { useState, useEffect } from "react";
-import { ShoppingBag, ArrowRight, Check, HelpCircle, Layers, TrendingDown, Heart } from "lucide-react";
+import { ShoppingBag, ArrowRight, Check, HelpCircle, Layers, TrendingDown, Heart, Store } from "lucide-react";
 import { Product } from "../types";
 import { firestoreSync } from "../lib/firebase";
 import { useAppStore } from "../store";
+import { translations } from "../translations";
+import { getOptimizedImageUrl } from "../utils/imageOptimizer";
 
 interface ProductCardProps {
   product: Product;
   formatCurrency: (value: number) => string;
-  onBuy: (productId: string, quantity: number) => void;
+  onBuy: (productId: string, quantity: number, color?: string) => void;
   actionText?: string;
   onOpenDetail?: (product: Product) => void;
+  onOpenStore?: (vendorId: string, storeName: string) => void;
 }
 
 export default function ProductCard({
   product,
   formatCurrency,
   onBuy,
-  actionText = "Acheter avec Escrow",
-  onOpenDetail
+  actionText,
+  onOpenDetail,
+  onOpenStore
 }: ProductCardProps) {
-  const { wishlist, toggleWishlist } = useAppStore();
+  const { wishlist, toggleWishlist, lang } = useAppStore();
+  const t = translations[lang] || translations.FR;
+  const effectiveActionText = actionText || t.buyNow || "Acheter avec Escrow";
   const isFavorite = wishlist.includes(product.id);
   const [qty, setQty] = useState(1);
   const [vendorProfile, setVendorProfile] = useState<any | null>(null);
@@ -47,12 +53,44 @@ export default function ProductCard({
     loadVendorProfile();
   }, [product.vendorId]);
 
+  // Variants & Colors handling
+  const parsedVariants: { color: string; price?: number }[] = Array.isArray(product.variants)
+    ? product.variants
+    : (typeof product.variants === "string" ? (() => { try { return JSON.parse(product.variants); } catch (e) { return []; } })() : []);
+
+  const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
+  const activeVariant = parsedVariants[selectedVariantIdx];
+
+  // Touch handlers for responsive mobile tap without scroll interference
+  const touchStartPos = React.useRef<{ x: number; y: number } | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartPos.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartPos.current) return;
+    const touchEnd = e.changedTouches[0];
+    const dx = Math.abs(touchEnd.clientX - touchStartPos.current.x);
+    const dy = Math.abs(touchEnd.clientY - touchStartPos.current.y);
+    if (dx < 10 && dy < 10) {
+      if (onOpenDetail) {
+        onOpenDetail(product);
+      }
+    }
+    touchStartPos.current = null;
+  };
+
   const hasWholesale = !!(product.wholesalePrice && product.wholesaleMinQty);
   const wholesaleMin = product.wholesaleMinQty || 1;
   const wholesalePrice = product.wholesalePrice || product.price;
 
   const isWholesaleActive = hasWholesale && qty >= wholesaleMin;
-  const activeUnitPrice = isWholesaleActive ? wholesalePrice : product.price;
+  const basePrice = activeVariant?.price ? activeVariant.price : product.price;
+  const activeUnitPrice = isWholesaleActive ? wholesalePrice : basePrice;
   const totalPrice = activeUnitPrice * qty;
 
   // Calculate savings percentage and absolute savings
@@ -102,13 +140,17 @@ export default function ProductCard({
     >
       <div 
         onClick={() => onOpenDetail && onOpenDetail(product)} 
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
         className={onOpenDetail ? "cursor-pointer" : ""}
       >
         {/* Product Image & Badge Overlay */}
         <div className="relative aspect-video bg-emerald-50/30 dark:bg-emerald-900/40 overflow-hidden">
           <img
-            src={activeImage}
+            src={getOptimizedImageUrl(activeImage, 500, 70)}
             alt={product.title}
+            loading="lazy"
+            decoding="async"
             referrerPolicy="no-referrer"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
@@ -191,17 +233,61 @@ export default function ProductCard({
             <h4 className="font-extrabold text-sm text-emerald-950 dark:text-white leading-tight group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors font-display">
               {product.title}
             </h4>
+
+            {/* Vendor Badge & Store Name explicitly below product title */}
+            <div className="mt-1.5 mb-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onOpenStore && product.vendorId) {
+                    onOpenStore(product.vendorId, vendorProfile?.shopName || product.vendor?.name || "LGF's Mall");
+                  }
+                }}
+                className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-emerald-100/80 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 text-[11px] font-bold border border-emerald-200/60 dark:border-emerald-700/60 hover:text-emerald-900 dark:hover:text-white transition-colors cursor-pointer"
+              >
+                <Store className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span className="truncate max-w-[180px]">{vendorProfile?.shopName || product.vendor?.name || "LGF's Mall"}</span>
+              </button>
+            </div>
+
             <p className="text-xs text-emerald-800 dark:text-emerald-200/90 line-clamp-2 leading-relaxed mt-1">
               {product.description}
             </p>
           </div>
+
+          {/* Color Variants Pills (if available) */}
+          {parsedVariants.length > 0 && (
+            <div className="space-y-1.5 p-2 bg-emerald-50/40 dark:bg-emerald-900/30 rounded-xl border border-emerald-100/40 dark:border-emerald-800/40">
+              <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase font-mono block">Couleur disponible :</span>
+              <div className="flex flex-wrap gap-1">
+                {parsedVariants.map((v, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedVariantIdx(idx);
+                    }}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer border ${
+                      selectedVariantIdx === idx
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                        : "bg-white dark:bg-emerald-950/80 text-slate-700 dark:text-emerald-200 border-slate-200 dark:border-emerald-800 hover:border-emerald-400"
+                    }`}
+                  >
+                    {v.color} {v.price && v.price !== product.price ? `(${formatCurrency(v.price)})` : ""}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Pricing Stats Grid */}
           <div className="p-3.5 bg-emerald-50/50 dark:bg-emerald-900/50 rounded-2xl border border-emerald-100/50 dark:border-emerald-800/60 grid grid-cols-2 gap-2 text-xs">
             <div>
               <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase font-mono block">Prix de Détail :</span>
               <span className={`font-extrabold text-sm block ${isWholesaleActive ? "line-through text-slate-400 dark:text-slate-500" : "text-emerald-950 dark:text-white"}`}>
-                {formatCurrency(product.price)}
+                {formatCurrency(basePrice)}
               </span>
             </div>
             {hasWholesale ? (
@@ -214,10 +300,19 @@ export default function ProductCard({
               </div>
             ) : (
               <div>
-                <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase font-mono block">Vendeur vérifié :</span>
-                <span className="font-semibold text-[10px] text-emerald-900 dark:text-emerald-200 truncate block mt-0.5">
-                  {product.vendor?.name || "Boutique d'Assigamé"}
-                </span>
+                <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase font-mono block">Boutique Vendeur :</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onOpenStore && product.vendorId) {
+                      onOpenStore(product.vendorId, vendorProfile?.shopName || product.vendor?.name || "Boutique d'Assigamé");
+                    }
+                  }}
+                  className="font-bold text-[10px] text-emerald-700 hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-100 underline truncate block mt-0.5 text-left cursor-pointer"
+                >
+                  {vendorProfile?.shopName || product.vendor?.name || "Boutique d'Assigamé"}
+                </button>
               </div>
             )}
           </div>
@@ -313,7 +408,7 @@ export default function ProductCard({
         <div className="space-y-2">
           <button
             disabled={product.stock === 0}
-            onClick={() => onBuy(product.id, qty)}
+            onClick={() => onBuy(product.id, qty, activeVariant?.color)}
             className={`w-full font-bold py-3 px-4 rounded-2xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer ${
               product.stock === 0
                 ? "bg-slate-100 text-slate-400 cursor-not-allowed"
@@ -323,7 +418,7 @@ export default function ProductCard({
             }`}
           >
             <ShoppingBag className="w-4 h-4" />
-            <span>{product.stock === 0 ? "En Rupture" : actionText}</span>
+            <span>{product.stock === 0 ? (t.outOfStock || "Rupture de stock") : effectiveActionText}</span>
           </button>
 
           <a

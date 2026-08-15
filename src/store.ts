@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { User, PlatformStats, Kyc, SupportedLanguage, UserRole, Product, Order, Investment } from "./types";
+import { User, PlatformStats, Kyc, SupportedLanguage, UserRole, Product, Order, Investment, InvestmentProject } from "./types";
 import { firestoreSync } from "./lib/firebase";
 
 export interface CartItem {
@@ -22,6 +22,7 @@ interface AppState {
   buyerOrders: Order[];
   vendorOrders: Order[];
   investments: Investment[];
+  investmentProjects: InvestmentProject[];
   isLoading: boolean;
   error: string | null;
   successMessage: string | null;
@@ -35,11 +36,13 @@ interface AppState {
   initSession: () => Promise<void>;
   login: (email: string, password: string) => Promise<boolean>;
   loginWithGoogle: (data: { email: string; name: string; uid: string; role?: UserRole; phone?: string }) => Promise<boolean>;
+  loginWithSupabaseOAuthData: (user: any, token: string) => void;
   register: (data: { email: string; name: string; password: string; phone: string; role: UserRole }) => Promise<boolean>;
   verifyEmail: (email: string, token?: string) => Promise<boolean>;
   logout: () => void;
   fetchStats: () => Promise<void>;
   submitKyc: (data: { documentType: string; idNumber: string; documentUrl?: string }) => Promise<boolean>;
+  updateUserProfile: (data: { name?: string; phone?: string }) => Promise<boolean>;
   fetchPendingKycs: () => Promise<void>;
   fetchAllUsers: () => Promise<void>;
   verifyKyc: (kycId: string, status: "APPROVED" | "REJECTED", rejectionReason?: string) => Promise<boolean>;
@@ -56,6 +59,10 @@ interface AppState {
   withdrawEscrowFunds: (data: { method: string; accountNumber: string }) => Promise<boolean>;
   fetchInvestments: () => Promise<void>;
   createInvestment: (amount: number) => Promise<boolean>;
+  fetchInvestmentProjects: (status?: string, search?: string) => Promise<void>;
+  createInvestmentProject: (data: Partial<InvestmentProject>) => Promise<boolean>;
+  updateInvestmentProject: (id: string, data: Partial<InvestmentProject>) => Promise<boolean>;
+  deleteInvestmentProject: (id: string) => Promise<boolean>;
   
   addToCart: (product: Product, quantity: number, size?: string, color?: string) => void;
   removeFromCart: (itemId: string) => void;
@@ -72,7 +79,7 @@ const API_BASE = "/api";
 export const useAppStore = create<AppState>((set, get) => ({
   user: null,
   token: null,
-  lang: "FR",
+  lang: (typeof window !== "undefined" && (localStorage.getItem("lgf_lang") as SupportedLanguage)) || "FR",
   stats: null,
   pendingKycs: [],
   allUsers: [],
@@ -81,6 +88,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   buyerOrders: [],
   vendorOrders: [],
   investments: [],
+  investmentProjects: [],
   isLoading: false,
   error: null,
   successMessage: null,
@@ -89,7 +97,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   cart: [],
   wishlist: [],
 
-  setLanguage: (lang: SupportedLanguage) => set({ lang }),
+  setLanguage: (lang: SupportedLanguage) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("lgf_lang", lang);
+    }
+    set({ lang });
+  },
   
   clearMessages: () => set({ error: null, successMessage: null, requiresEmailVerification: false, pendingVerificationEmail: "" }),
 
@@ -239,16 +252,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         return false;
       }
 
-      // SECURITY FIX: Check if email is actually verified before completing authentication
-      if (!data.verified && !data.user?.emailVerified) {
-        set({ 
-          error: "Veuillez confirmer votre adresse e-mail avant de continuer.",
-          requiresEmailVerification: true,
-          pendingVerificationEmail: email
-        });
-        return false;
-      }
-
       localStorage.setItem("lgf_token", data.token);
       set({ user: data.user, token: data.token, successMessage: data.message, error: null, requiresEmailVerification: false, pendingVerificationEmail: "" });
 
@@ -297,6 +300,22 @@ export const useAppStore = create<AppState>((set, get) => ({
       return false;
     } finally {
       set({ isLoading: false });
+    }
+  },
+
+  loginWithSupabaseOAuthData: (user, token) => {
+    localStorage.setItem("lgf_token", token);
+    set({
+      user,
+      token,
+      successMessage: "Connexion réussie via Supabase OAuth 2.1 !",
+      error: null,
+      requiresEmailVerification: false,
+      pendingVerificationEmail: ""
+    });
+    if (user) {
+      firestoreSync.saveDocument("users", user.id, user);
+      get().syncCartWithFirebase(user.id);
     }
   },
 
@@ -352,6 +371,40 @@ export const useAppStore = create<AppState>((set, get) => ({
       return true;
     } catch (err) {
       set({ error: "Erreur réseau lors de la soumission du KYC." });
+      return false;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  updateUserProfile: async (data) => {
+    const token = get().token;
+    if (!token) return false;
+
+    set({ isLoading: true, error: null });
+    try {
+      const res = await fetch(`${API_BASE}/auth/profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(data)
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        set({ error: result.error || "Erreur lors de la mise à jour du profil.", isLoading: false });
+        return false;
+      }
+      const currentUser = get().user;
+      if (currentUser) {
+        const updatedUser = { ...currentUser, ...result.user };
+        set({ user: updatedUser, successMessage: "Profil mis à jour avec succès !", isLoading: false });
+        firestoreSync.saveDocument("users", updatedUser.id, updatedUser);
+      }
+      return true;
+    } catch (err) {
+      set({ error: "Erreur réseau lors de la mise à jour du profil.", isLoading: false });
       return false;
     } finally {
       set({ isLoading: false });
@@ -439,7 +492,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           if (!Array.isArray(imgs) || imgs.length === 0) {
             imgs = [p.image].filter(Boolean);
           }
-          return { ...p, images: imgs };
+          let v = p.variants;
+          if (typeof v === "string") {
+            try { v = JSON.parse(v); } catch (e) { v = null; }
+          }
+          return { ...p, images: imgs, variants: v };
         });
         set({ products: parsed });
 
@@ -471,7 +528,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           if (!Array.isArray(imgs) || imgs.length === 0) {
             imgs = [p.image].filter(Boolean);
           }
-          return { ...p, images: imgs };
+          let v = p.variants;
+          if (typeof v === "string") {
+            try { v = JSON.parse(v); } catch (e) { v = null; }
+          }
+          return { ...p, images: imgs, variants: v };
         });
         set({ vendorProducts: parsed });
       }
@@ -802,6 +863,116 @@ export const useAppStore = create<AppState>((set, get) => ({
       return true;
     } catch (err) {
       set({ error: "Erreur réseau lors de l'investissement." });
+      return false;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  fetchInvestmentProjects: async (status, search) => {
+    try {
+      const params = new URLSearchParams();
+      if (status) params.append("status", status);
+      if (search) params.append("search", search);
+      const url = `${API_BASE}/investment-projects${params.toString() ? `?${params.toString()}` : ""}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        set({ investmentProjects: data });
+      }
+    } catch (err) {
+      console.error("Error fetching investment projects:", err);
+    }
+  },
+
+  createInvestmentProject: async (projectData) => {
+    const token = get().token;
+    if (!token) return false;
+
+    set({ isLoading: true, error: null, successMessage: null });
+    try {
+      const res = await fetch(`${API_BASE}/investment-projects`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(projectData)
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        set({ error: data.error || "Erreur lors de la création du projet d'investissement." });
+        return false;
+      }
+
+      set({ successMessage: data.message, error: null });
+      await get().fetchInvestmentProjects();
+      return true;
+    } catch (err) {
+      set({ error: "Erreur réseau lors de la création du projet d'investissement." });
+      return false;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  updateInvestmentProject: async (id, projectData) => {
+    const token = get().token;
+    if (!token) return false;
+
+    set({ isLoading: true, error: null, successMessage: null });
+    try {
+      const res = await fetch(`${API_BASE}/investment-projects/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(projectData)
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        set({ error: data.error || "Erreur lors de la modification du projet d'investissement." });
+        return false;
+      }
+
+      set({ successMessage: data.message, error: null });
+      await get().fetchInvestmentProjects();
+      return true;
+    } catch (err) {
+      set({ error: "Erreur réseau lors de la modification du projet d'investissement." });
+      return false;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  deleteInvestmentProject: async (id) => {
+    const token = get().token;
+    if (!token) return false;
+
+    set({ isLoading: true, error: null, successMessage: null });
+    try {
+      const res = await fetch(`${API_BASE}/investment-projects/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        set({ error: data.error || "Erreur lors de la suppression du projet d'investissement." });
+        return false;
+      }
+
+      set({ successMessage: data.message, error: null });
+      await get().fetchInvestmentProjects();
+      return true;
+    } catch (err) {
+      set({ error: "Erreur réseau lors de la suppression du projet d'investissement." });
       return false;
     } finally {
       set({ isLoading: false });

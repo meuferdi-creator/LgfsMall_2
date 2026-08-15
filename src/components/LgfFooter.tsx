@@ -12,19 +12,34 @@ import {
   Apple,
   Play
 } from "lucide-react";
+import { useAppStore } from "../store";
+import { translations } from "../translations";
 
 interface LgfFooterProps {
   theme?: "light" | "dark";
   onOpenVendorPortal?: () => void;
   onOpenTrackOrders?: () => void;
+  onNavigate?: (route: string) => void;
 }
 
 export default function LgfFooter({
   theme = "light",
   onOpenVendorPortal,
-  onOpenTrackOrders
+  onOpenTrackOrders,
+  onNavigate
 }: LgfFooterProps) {
+  const { lang } = useAppStore();
+  const t = translations[lang] || translations.FR;
   const isDark = theme === "dark";
+
+  const handleLinkClick = (route: string) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (onNavigate) {
+      onNavigate(route);
+    } else {
+      window.location.hash = `#${route}`;
+    }
+  };
 
   return (
     <footer id="lgf-footer" className={`lgf-footer high-contrast-fix w-full transition-colors duration-200 ${
@@ -113,7 +128,7 @@ export default function LgfFooter({
                 </p>
                 <p className="flex items-center space-x-2">
                   <Mail className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
-                  <a href="mailto:lgfmall.lmd11@gmail.com" className="hover:text-emerald-700 dark:hover:text-amber-300 font-semibold">lgfmall.lmd11@gmail.com</a>
+                  <a href="mailto:lgfmall.lmdg11@gmail.com" className="hover:text-emerald-700 dark:hover:text-amber-300 font-semibold">lgfmall.lmdg11@gmail.com</a>
                 </p>
               </div>
 
@@ -136,11 +151,11 @@ export default function LgfFooter({
             <div className="space-y-3">
               <h5 className="text-xs font-extrabold text-slate-900 dark:text-amber-300 uppercase tracking-wider font-mono">À propos</h5>
               <ul className="space-y-2 text-xs text-slate-600 dark:text-emerald-100/90 font-medium">
-                <li><a href="#about" className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors">Qui sommes-nous</a></li>
-                <li><a href="#careers" className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors">Carrières</a></li>
-                <li><a href="#blog" className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors">Blog</a></li>
-                <li><a href="#press" className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors">Presse</a></li>
-                <li><a href="#sustainability" className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors">Durabilité</a></li>
+                <li><a href="#about" onClick={handleLinkClick("about")} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer">Qui sommes-nous</a></li>
+                <li><a href="#careers" onClick={handleLinkClick("careers")} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer">Carrières</a></li>
+                <li><a href="#blog" onClick={handleLinkClick("blog")} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer">Blog</a></li>
+                <li><a href="#press" onClick={handleLinkClick("press")} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer">Presse</a></li>
+                <li><a href="#sustainability" onClick={handleLinkClick("sustainability")} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer">Durabilité</a></li>
               </ul>
             </div>
 
@@ -148,11 +163,11 @@ export default function LgfFooter({
             <div className="space-y-3">
               <h5 className="text-xs font-extrabold text-slate-900 dark:text-amber-300 uppercase tracking-wider font-mono">Aide</h5>
               <ul className="space-y-2 text-xs text-slate-600 dark:text-emerald-100/90 font-medium">
-                <li><a href="#help" className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors">Centre d'aide</a></li>
+                <li><a href="#help" onClick={handleLinkClick("help")} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer">Centre d'aide</a></li>
                 <li><button type="button" onClick={onOpenTrackOrders} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer text-left">Suivre ma commande</button></li>
-                <li><a href="#shipping" className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors">Livraison</a></li>
-                <li><a href="#returns" className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors">Retours & remboursements</a></li>
-                <li><a href="#faq" className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors">FAQ</a></li>
+                <li><a href="#delivery" onClick={handleLinkClick("delivery")} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer">Livraison</a></li>
+                <li><a href="#returns" onClick={handleLinkClick("returns")} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer">Retours & remboursements</a></li>
+                <li><a href="#faq" onClick={handleLinkClick("faq")} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer">FAQ</a></li>
               </ul>
             </div>
 
@@ -162,9 +177,9 @@ export default function LgfFooter({
               <ul className="space-y-2 text-xs text-slate-600 dark:text-emerald-100/90 font-medium">
                 <li><button type="button" onClick={onOpenVendorPortal} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer text-left">Devenir vendeur</button></li>
                 <li><button type="button" onClick={onOpenVendorPortal} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer text-left">Espace vendeur</button></li>
-                <li><a href="#commissions" className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors">Commissions</a></li>
-                <li><a href="#ads" className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors">Publicité sponsorisée</a></li>
-                <li><a href="#affiliates" className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors">Programme affiliés</a></li>
+                <li><a href="#commissions" onClick={handleLinkClick("commissions")} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer">Commissions</a></li>
+                <li><a href="#ads" onClick={handleLinkClick("ads")} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer">Publicité sponsorisée</a></li>
+                <li><a href="#affiliates" onClick={handleLinkClick("affiliates")} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer">Programme affiliés</a></li>
               </ul>
             </div>
 
@@ -172,11 +187,11 @@ export default function LgfFooter({
             <div className="space-y-3">
               <h5 className="text-xs font-extrabold text-slate-900 dark:text-amber-300 uppercase tracking-wider font-mono">Paiements</h5>
               <ul className="space-y-2 text-xs text-slate-600 dark:text-emerald-100/90 font-medium">
-                <li><span>Moov Money</span></li>
-                <li><span>Mixx by Yas</span></li>
-                <li><span>MTN MoMo</span></li>
-                <li><span>Visa / Mastercard</span></li>
-                <li><span>PayPal & Stripe</span></li>
+                <li><a href="#payments" onClick={handleLinkClick("payments")} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer">Moov Money</a></li>
+                <li><a href="#payments" onClick={handleLinkClick("payments")} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer">Mixx by Yas</a></li>
+                <li><a href="#payments" onClick={handleLinkClick("payments")} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer">MTN MoMo</a></li>
+                <li><a href="#payments" onClick={handleLinkClick("payments")} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer">Visa / Mastercard</a></li>
+                <li><a href="#payments" onClick={handleLinkClick("payments")} className="hover:text-emerald-700 dark:hover:text-amber-300 transition-colors cursor-pointer">PayPal & Stripe</a></li>
               </ul>
             </div>
 
@@ -255,9 +270,9 @@ export default function LgfFooter({
             </div>
 
             <div className="flex items-center space-x-4 font-medium">
-              <a href="#terms" className="hover:underline hover:text-emerald-700 dark:hover:text-amber-300">Conditions</a>
-              <a href="#privacy" className="hover:underline hover:text-emerald-700 dark:hover:text-amber-300">Confidentialité</a>
-              <a href="#cookies" className="hover:underline hover:text-emerald-700 dark:hover:text-amber-300">Cookies</a>
+              <a href="#terms" onClick={handleLinkClick("terms")} className="hover:underline hover:text-emerald-700 dark:hover:text-amber-300 cursor-pointer">Conditions</a>
+              <a href="#privacy" onClick={handleLinkClick("privacy")} className="hover:underline hover:text-emerald-700 dark:hover:text-amber-300 cursor-pointer">Confidentialité</a>
+              <a href="#cookies" onClick={handleLinkClick("cookies")} className="hover:underline hover:text-emerald-700 dark:hover:text-amber-300 cursor-pointer">Cookies</a>
             </div>
           </div>
 

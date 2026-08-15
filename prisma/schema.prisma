@@ -1,6 +1,6 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 generator client {
@@ -15,6 +15,24 @@ model User {
   phone            String?
   role             String         @default("BUYER") // BUYER, VENDOR, DRIVER, INVESTOR, ADMIN
   isEmailVerified  Boolean        @default(false)
+
+  // Hashed (SHA-256) one-time tokens for email verification / password reset.
+  // Never store the raw token - only its hash, so a DB leak alone can't be used to take over accounts.
+  verificationTokenHash   String?
+  verificationTokenExpiry DateTime?
+  resetTokenHash          String?
+  resetTokenExpiry        DateTime?
+
+  passwordChangedAt DateTime?
+  bankName          String?
+  accountNumber     String?
+  taxId             String?
+
+  referralCode      String?        @unique
+  referredById      String?
+  twoFactorEnabled  Boolean        @default(false)
+  twoFactorSecret   String?
+
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   
@@ -22,10 +40,18 @@ model User {
   products         Product[]      @relation("VendorProducts")
   orders           Order[]        @relation("BuyerOrders")
   escrowWallet     EscrowWallet?  @relation("VendorEscrowWallet")
+  userWallet       UserWallet?    @relation("UserWalletRel")
   investments      Investment[]   @relation("InvestorInvestments")
   liveStreams      LiveStream[]   @relation("VendorLiveStreams")
   sentMessages     Message[]      @relation("SentMessages")
   receivedMessages Message[]      @relation("ReceivedMessages")
+  coupons          Coupon[]
+  vendorOrderItems OrderItem[]    @relation("VendorOrderItems")
+  questions        ProductQuestion[]
+  answers          ProductAnswer[]
+  referralsSent    Referral[]     @relation("ReferrerUser")
+  referralsReceived Referral?     @relation("RefereeUser")
+  walletTransactions WalletTransaction[]
 }
 
 model Kyc {
@@ -50,51 +76,133 @@ model Product {
   wholesaleMinQty Int?     // Minimum quantity for wholesale
   image           String?
   images          String?  // JSON stringified list of image URLs
+  variants        String?  // JSON stringified list of color/variant objects [{ color, price }]
   category        String
   stock           Int      @default(0)
   vendorId        String
   vendor          User     @relation("VendorProducts", fields: [vendorId], references: [id], onDelete: Cascade)
+  isFlashDeal     Boolean  @default(false)
+  flashPrice      Float?
+  flashEndTime    DateTime?
+  isFeatured      Boolean  @default(false)
+  orderItems      OrderItem[]
+  questions       ProductQuestion[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+model Coupon {
+  id             String    @id @default(uuid())
+  code           String    @unique
+  discountType   String    @default("PERCENTAGE") // PERCENTAGE or FIXED
+  discountValue  Float     // e.g. 10 (%) or 1000 (FCFA)
+  minOrderAmount Float     @default(0)
+  maxUses        Int       @default(100)
+  usedCount      Int       @default(0)
+  expiryDate     DateTime?
+  isActive       Boolean   @default(true)
+  vendorId       String?
+  vendor         User?     @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }
 
 model Order {
   id               String        @id @default(uuid())
   buyerId          String
   buyer            User          @relation("BuyerOrders", fields: [buyerId], references: [id], onDelete: Cascade)
-  status           String        @default("PENDING") // PENDING, PAID, ESCROW_HELD, DISPATCHED, DELIVERED, COMPLETED, CANCELLED
+  status           String        @default("ORDER_CREATED") // ORDER_CREATED, PAYMENT_PENDING, PAYMENT_CONFIRMED, ESCROW_HELD, DISPATCHED, DELIVERED, COMPLETED, CANCELLED
   total            Float
   currency         String        @default("XOF")
   paymentMethod    String?       // TMoney, Flooz, Card
+  paymentTxId      String?
   escrowWalletId   String?
   escrowWallet     EscrowWallet? @relation(fields: [escrowWalletId], references: [id])
   driverId         String?
   driverOtp        String?
+  items            OrderItem[]
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 }
 
+model OrderItem {
+  id              String   @id @default(uuid())
+  orderId         String
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  vendorId        String
+  vendor          User     @relation("VendorOrderItems", fields: [vendorId], references: [id], onDelete: Cascade)
+  quantity        Int      @default(1)
+  unitPrice       Float
+  subtotal        Float
+  variant         String?  // Color, Size, Variant name
+  productSnapshot String?  // JSON stringified product details (title, image, category)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
 model EscrowWallet {
-  id             String   @id @default(uuid())
-  vendorId       String   @unique
-  vendor         User     @relation("VendorEscrowWallet", fields: [vendorId], references: [id], onDelete: Cascade)
-  balance        Float    @default(0.0) // Cleared and withdrawable balance in XOF
-  pendingBalance Float    @default(0.0) // Held in escrow balance in XOF
-  currency       String   @default("XOF")
-  orders         Order[]
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                String             @id @default(uuid())
+  vendorId          String             @unique
+  vendor            User               @relation("VendorEscrowWallet", fields: [vendorId], references: [id], onDelete: Cascade)
+  balance           Float              @default(0.0) // Cleared and withdrawable balance in XOF
+  pendingBalance    Float              @default(0.0) // Held in escrow balance in XOF
+  currency          String             @default("XOF")
+  orders            Order[]
+  withdrawalRequests WithdrawalRequest[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+// A withdrawal is now a two-step process: the vendor requests it (funds are moved
+// out of `balance` immediately so they can't be double-spent), then an admin/finance
+// operator confirms once the real bank/mobile-money transfer has actually gone through.
+// This replaces the previous flow which zeroed the balance and claimed the transfer
+// was "in progress" with no real payment-gateway integration behind it.
+model WithdrawalRequest {
+  id             String       @id @default(uuid())
+  walletId       String
+  wallet         EscrowWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  amount         Float
+  method         String       // TMoney, Flooz, Ecobank...
+  accountNumber  String
+  status         String       @default("PENDING") // PENDING, COMPLETED, REJECTED
+  rejectionReason String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 }
 
 model Investment {
-  id         String   @id @default(uuid())
+  id         String             @id @default(uuid())
   investorId String
-  investor   User     @relation("InvestorInvestments", fields: [investorId], references: [id], onDelete: Cascade)
+  investor   User               @relation("InvestorInvestments", fields: [investorId], references: [id], onDelete: Cascade)
+  projectId  String?
+  project    InvestmentProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   amount     Float
-  status     String   @default("ACTIVE") // ACTIVE, COMPLETED
-  roi        Float    // Estimated return rate in %
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  status     String             @default("ACTIVE") // ACTIVE, COMPLETED
+  roi        Float              // Estimated return rate in %
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+}
+
+model InvestmentProject {
+  id                     String       @id @default(uuid())
+  title                  String
+  description            String
+  targetAmount           Float        // Montant cible en FCFA
+  raisedAmount           Float        @default(0.0) // Montant déjà collecté
+  estimatedReturn        Float        // Rendement estimé en % (ex: 15.0)
+  investmentDuration     Int          // Durée numérique (ex: 24)
+  investmentDurationUnit String       @default("MONTHS") // MONTHS, YEARS, DAYS
+  status                 String       @default("DRAFT") // DRAFT, ACTIVE, COMPLETED, SUSPENDED
+  coverImage             String?      // Main image URL
+  images                 String?      // JSON array string of image URLs
+  documents              String?      // JSON array string of document objects [{ name, url, type, size }]
+  authorId               String?      // Admin user ID
+  investments            Investment[]
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
 }
 
 model LiveStream {
@@ -118,3 +226,119 @@ model Message {
   content    String
   createdAt  DateTime @default(now())
 }
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  adminId   String?
+  action    String
+  resource  String
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
+
+model OtpCode {
+  id        String   @id @default(uuid())
+  email     String
+  codeHash  String
+  type      String   // EMAIL_VERIFY, PASSWORD_RESET, KYC_VERIFY, PHONE_OTP
+  expiresAt DateTime
+  isUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model RateLimitLog {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  count     Int      @default(1)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserWallet {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation("UserWalletRel", fields: [userId], references: [id], onDelete: Cascade)
+  balance   Float    @default(0.0)
+  currency  String   @default("XOF")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PlatformWallet {
+  id        String   @id @default(uuid())
+  balance   Float    @default(0.0)
+  currency  String   @default("XOF")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WalletTransaction {
+  id           String   @id @default(uuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  walletType   String   @default("USER") // USER, ESCROW, PLATFORM
+  type         String   // CREDIT, DEBIT, COMMISSION, ESCROW_RELEASE, TOPUP, WITHDRAWAL, REFERRAL_BONUS
+  amount       Float
+  balanceAfter Float
+  reference    String?  // Order ID, Gateway TX ID, or Referral ID
+  description  String
+  status       String   @default("COMPLETED") // COMPLETED, PENDING, FAILED
+  createdAt    DateTime @default(now())
+}
+
+model ProductQuestion {
+  id        String          @id @default(uuid())
+  productId String
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question  String
+  createdAt DateTime        @default(now())
+  answers   ProductAnswer[]
+}
+
+model ProductAnswer {
+  id         String          @id @default(uuid())
+  questionId String
+  question   ProductQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answer     String
+  createdAt  DateTime        @default(now())
+}
+
+model Referral {
+  id           String   @id @default(uuid())
+  referrerId   String
+  referrer     User     @relation("ReferrerUser", fields: [referrerId], references: [id], onDelete: Cascade)
+  refereeId    String   @unique
+  referee      User     @relation("RefereeUser", fields: [refereeId], references: [id], onDelete: Cascade)
+  status       String   @default("PENDING") // PENDING, COMPLETED, REWARDED
+  rewardAmount Float    @default(1000.0) // 1000 XOF bonus
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model DriverLocation {
+  id        String   @id @default(uuid())
+  driverId  String   @unique
+  latitude  Float
+  longitude Float
+  speed     Float?
+  heading   Float?
+  updatedAt DateTime @updatedAt
+}
+
+model OrderTrackingLog {
+  id        String   @id @default(uuid())
+  orderId   String
+  status    String
+  location  String?
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+

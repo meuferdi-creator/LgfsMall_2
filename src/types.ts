@@ -54,6 +54,13 @@ export interface PlatformStats {
   totalOrders: number;
 }
 
+export interface ProductVariant {
+  id?: string;
+  color?: string;
+  name?: string;
+  price?: number;
+}
+
 export interface Product {
   id: string;
   title: string;
@@ -63,6 +70,7 @@ export interface Product {
   wholesaleMinQty: number | null;
   image: string | null;
   images?: string[] | null;
+  variants?: ProductVariant[] | string | null;
   category: string;
   stock: number;
   vendorId: string;
@@ -72,6 +80,25 @@ export interface Product {
     email: string;
     phone: string | null;
   };
+  isFlashDeal?: boolean;
+  flashPrice?: number | null;
+  flashEndTime?: string | null;
+  isFeatured?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Coupon {
+  id: string;
+  code: string;
+  discountType: "PERCENTAGE" | "FIXED";
+  discountValue: number;
+  minOrderAmount: number;
+  maxUses: number;
+  usedCount: number;
+  expiryDate?: string | null;
+  isActive: boolean;
+  vendorId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -110,9 +137,38 @@ export interface Order {
 export interface Investment {
   id: string;
   investorId: string;
+  projectId?: string | null;
   amount: number;
   status: "ACTIVE" | "COMPLETED";
   roi: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type InvestmentProjectStatus = "DRAFT" | "ACTIVE" | "COMPLETED" | "SUSPENDED";
+
+export interface InvestmentProjectDocument {
+  id?: string;
+  name: string;
+  url: string;
+  type?: string;
+  size?: number;
+}
+
+export interface InvestmentProject {
+  id: string;
+  title: string;
+  description: string;
+  targetAmount: number;
+  raisedAmount?: number;
+  estimatedReturn: number;
+  investmentDuration: number;
+  investmentDurationUnit: string; // e.g. "MONTHS", "YEARS", "DAYS"
+  status: InvestmentProjectStatus;
+  coverImage: string | null;
+  images?: string[] | null;
+  documents?: InvestmentProjectDocument[] | string | null;
+  authorId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

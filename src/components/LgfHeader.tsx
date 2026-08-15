@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { 
   ShoppingBag, 
   Search, 
@@ -22,8 +22,9 @@ import {
   Zap,
   SlidersHorizontal
 } from "lucide-react";
-import { SupportedLanguage } from "../translations";
+import { translations, SupportedLanguage } from "../translations";
 import { UserRole } from "../types";
+import { useClickOutside } from "../hooks/useClickOutside";
 
 interface LgfHeaderProps {
   user: any;
@@ -93,6 +94,18 @@ export default function LgfHeader({
   const [currency, setCurrency] = useState("XOF FCFA");
   const [showUserMenu, setShowUserMenu] = useState(false);
 
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const categoryDropdownRef = useRef<HTMLDivElement | null>(null);
+  const langDropdownRef = useRef<HTMLDivElement | null>(null);
+  const currencyDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  useClickOutside(userMenuRef, () => setShowUserMenu(false), showUserMenu);
+  useClickOutside(categoryDropdownRef, () => setShowCategoryDropdown(false), showCategoryDropdown);
+  useClickOutside(langDropdownRef, () => setShowLangDropdown(false), showLangDropdown);
+  useClickOutside(currencyDropdownRef, () => setShowCurrencyDropdown(false), showCurrencyDropdown);
+
+  const t = translations[lang] || translations.FR;
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const catalogEl = document.getElementById("public-catalog") || document.getElementById("buyer-portal");
@@ -105,59 +118,59 @@ export default function LgfHeader({
     <header id="lgf-header" className="lgf-header sticky top-0 z-40 bg-white dark:bg-emerald-950 border-b border-slate-200 dark:border-emerald-800/60 shadow-md">
       
       {/* 1. TOP ANNOUNCEMENT TICKER BAR (Scrolling Marquee Ticker) */}
-      <div className="bg-amber-500 text-emerald-950 px-4 py-1.5 text-xs font-semibold flex items-center justify-between border-b border-amber-600/20 overflow-hidden relative select-none">
+      <div className="bg-amber-500 dark:bg-amber-500 text-slate-950 dark:text-slate-950 px-4 py-1.5 text-xs font-bold flex items-center justify-between border-b border-amber-600/40 overflow-hidden relative select-none shadow-xs">
         
         {/* Continuous Scrolling Marquee Track */}
         <div className="flex-1 overflow-hidden relative mr-4">
           <div className="animate-marquee flex items-center space-x-12 whitespace-nowrap cursor-pointer">
             {/* Loop Set 1 */}
             <div className="flex items-center space-x-8">
-              <div className="flex items-center space-x-1.5 font-bold">
-                <span className="bg-emerald-900 text-amber-300 text-[10px] px-1.5 py-0.5 rounded uppercase font-mono shadow-xs">
-                  Info
+              <div className="flex items-center space-x-2 font-black text-slate-950 dark:text-slate-950">
+                <span className="bg-slate-950 dark:bg-slate-950 text-amber-300 dark:text-amber-300 text-[10px] font-black px-2 py-0.5 rounded uppercase font-mono shadow-xs tracking-wide">
+                  INFO LGF
                 </span>
-                <span>🌿 Bienvenue sur LGF's Mall — Le Marché Africain de Confiance !</span>
+                <span>{t.welcomeTicker || "🌿 Bienvenue sur LGF's Mall — Le Marché Africain de Confiance !"}</span>
               </div>
-              <div className="flex items-center space-x-1.5 text-emerald-950 font-bold">
-                <Store className="w-3.5 h-3.5 text-emerald-900" />
-                <span>Devenez Vendeur Marchand — 0 FCFA Frais d'Inscription</span>
+              <div className="flex items-center space-x-2 text-slate-950 dark:text-slate-950 font-black">
+                <Store className="w-3.5 h-3.5 text-slate-950" />
+                <span>{t.becomeVendorTicker || "Devenez Vendeur Marchand — 0 FCFA Frais d'Inscription"}</span>
               </div>
-              <div className="flex items-center space-x-1.5 text-emerald-950 font-bold">
-                <Tag className="w-3.5 h-3.5 text-emerald-900" />
-                <span>Code Promo -10% : <strong className="bg-emerald-950 text-amber-300 px-1.5 py-0.5 rounded font-mono">LGF10</strong></span>
+              <div className="flex items-center space-x-2 text-slate-950 dark:text-slate-950 font-black">
+                <Tag className="w-3.5 h-3.5 text-slate-950" />
+                <span>{t.promoTicker || "Code Promo -10% :"} <strong className="bg-slate-950 dark:bg-slate-950 text-amber-300 dark:text-amber-300 px-2 py-0.5 rounded font-mono shadow-xs">LGF10</strong></span>
               </div>
-              <div className="flex items-center space-x-1.5 text-emerald-950 font-bold">
-                <Truck className="w-3.5 h-3.5 text-emerald-900" />
-                <span>Livraison Offerte partout au Togo dès 25 000 FCFA</span>
+              <div className="flex items-center space-x-2 text-slate-950 dark:text-slate-950 font-black">
+                <Truck className="w-3.5 h-3.5 text-slate-950" />
+                <span>{t.freeDeliveryTicker || "Livraison Offerte partout au Togo dès 25 000 FCFA"}</span>
               </div>
-              <div className="flex items-center space-x-1.5 text-emerald-950 font-bold">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-900" />
+              <div className="flex items-center space-x-2 text-slate-950 dark:text-slate-950 font-black">
+                <ShieldCheck className="w-3.5 h-3.5 text-slate-950" />
                 <span>Paiement Sécurisé TMoney, Flooz & Cartes Visa/Mastercard en Séquestre</span>
               </div>
             </div>
 
             {/* Loop Set 2 (Identical duplicate for seamless continuous loop) */}
             <div className="flex items-center space-x-8" aria-hidden="true">
-              <div className="flex items-center space-x-1.5 font-bold">
-                <span className="bg-emerald-900 text-amber-300 text-[10px] px-1.5 py-0.5 rounded uppercase font-mono shadow-xs">
-                  Info
+              <div className="flex items-center space-x-2 font-black text-slate-950 dark:text-slate-950">
+                <span className="bg-slate-950 dark:bg-slate-950 text-amber-300 dark:text-amber-300 text-[10px] font-black px-2 py-0.5 rounded uppercase font-mono shadow-xs tracking-wide">
+                  INFO LGF
                 </span>
                 <span>🌿 Bienvenue sur LGF's Mall — Le Marché Africain de Confiance !</span>
               </div>
-              <div className="flex items-center space-x-1.5 text-emerald-950 font-bold">
-                <Store className="w-3.5 h-3.5 text-emerald-900" />
+              <div className="flex items-center space-x-2 text-slate-950 dark:text-slate-950 font-black">
+                <Store className="w-3.5 h-3.5 text-slate-950" />
                 <span>Devenez Vendeur Marchand — 0 FCFA Frais d'Inscription</span>
               </div>
-              <div className="flex items-center space-x-1.5 text-emerald-950 font-bold">
-                <Tag className="w-3.5 h-3.5 text-emerald-900" />
-                <span>Code Promo -10% : <strong className="bg-emerald-950 text-amber-300 px-1.5 py-0.5 rounded font-mono">LGF10</strong></span>
+              <div className="flex items-center space-x-2 text-slate-950 dark:text-slate-950 font-black">
+                <Tag className="w-3.5 h-3.5 text-slate-950" />
+                <span>Code Promo -10% : <strong className="bg-slate-950 dark:bg-slate-950 text-amber-300 dark:text-amber-300 px-2 py-0.5 rounded font-mono shadow-xs">LGF10</strong></span>
               </div>
-              <div className="flex items-center space-x-1.5 text-emerald-950 font-bold">
-                <Truck className="w-3.5 h-3.5 text-emerald-900" />
+              <div className="flex items-center space-x-2 text-slate-950 dark:text-slate-950 font-black">
+                <Truck className="w-3.5 h-3.5 text-slate-950" />
                 <span>Livraison Offerte partout au Togo dès 25 000 FCFA</span>
               </div>
-              <div className="flex items-center space-x-1.5 text-emerald-950 font-bold">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-900" />
+              <div className="flex items-center space-x-2 text-slate-950 dark:text-slate-950 font-black">
+                <ShieldCheck className="w-3.5 h-3.5 text-slate-950" />
                 <span>Paiement Sécurisé TMoney, Flooz & Cartes Visa/Mastercard en Séquestre</span>
               </div>
             </div>
@@ -165,16 +178,16 @@ export default function LgfHeader({
         </div>
 
         {/* Right Shortcuts (Phone & Quick WhatsApp) */}
-        <div className="flex items-center space-x-3 shrink-0 font-bold text-[11px] bg-amber-500 pl-2 z-10">
-          <a href="tel:+22872998148" className="hover:underline flex items-center space-x-1 text-emerald-950">
-            <Phone className="w-3 h-3 text-emerald-950" />
+        <div className="flex items-center space-x-3 shrink-0 font-black text-[11px] bg-amber-500 dark:bg-amber-500 pl-3 z-10 text-slate-950 dark:text-slate-950">
+          <a href="tel:+22872998148" className="hover:underline flex items-center space-x-1 text-slate-950 dark:text-slate-950">
+            <Phone className="w-3.5 h-3.5 text-slate-950 dark:text-slate-950" />
             <span className="hidden sm:inline">+228 72 99 81 48</span>
           </a>
           <a
             href="https://wa.me/22872998148"
             target="_blank"
             rel="noopener noreferrer"
-            className="bg-[#25D366] text-white px-2 py-0.5 rounded text-[10px] font-bold hover:bg-[#20BA56] transition-all flex items-center space-x-1 shadow-xs"
+            className="bg-[#25D366] hover:bg-[#20BA56] text-white px-2.5 py-0.5 rounded-lg text-[10px] font-black transition-all flex items-center space-x-1 shadow-xs"
           >
             <span>WhatsApp</span>
           </a>
@@ -207,7 +220,7 @@ export default function LgfHeader({
               type="text"
               value={catalogSearch}
               onChange={(e) => setCatalogSearch(e.target.value)}
-              placeholder="Rechercher produits, marque..."
+              placeholder={t.searchPlaceholder || "Rechercher produits, marque..."}
               className="w-full bg-slate-100 dark:bg-emerald-900/50 border border-slate-200 dark:border-emerald-700/60 rounded-full py-2.5 pl-10 pr-24 text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-emerald-400/60 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner"
             />
             
@@ -237,7 +250,7 @@ export default function LgfHeader({
             className="ml-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-5 py-2.5 rounded-full text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center space-x-1.5 shrink-0 cursor-pointer active:scale-95"
           >
             <Search className="w-3.5 h-3.5" />
-            <span>Rechercher</span>
+            <span>{t.searchBtn || "Rechercher"}</span>
           </button>
         </form>
 
@@ -245,19 +258,21 @@ export default function LgfHeader({
         <div className="flex items-center space-x-2 sm:space-x-4 shrink-0">
           
           {/* Language Selector Dropdown */}
-          <div className="relative hidden md:block">
+          <div ref={langDropdownRef} className="relative block">
             <button
               type="button"
               onClick={() => setShowLangDropdown(!showLangDropdown)}
               className="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-emerald-800 text-xs font-bold text-slate-700 dark:text-emerald-200 hover:bg-slate-100 dark:hover:bg-emerald-900/50 cursor-pointer transition-all"
             >
               <Globe className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>{lang === "FR" ? "Français" : lang === "EN" ? "English" : lang}</span>
+              <span>
+                {lang === "FR" ? "Français 🇫🇷" : lang === "EN" ? "English 🇬🇧" : lang === "EWE" ? "Éwé 🇹🇬" : lang === "KABYE" ? "Kabyè 🇹🇬" : lang}
+              </span>
               <ChevronDown className="w-3 h-3" />
             </button>
 
             {showLangDropdown && (
-              <div className="absolute right-0 mt-2 w-32 bg-white dark:bg-emerald-950 border border-slate-200 dark:border-emerald-800 rounded-2xl shadow-xl p-1 z-50 animate-in fade-in-50">
+              <div className="absolute right-0 mt-2 w-44 bg-white dark:bg-emerald-950 border border-slate-200 dark:border-emerald-800 rounded-2xl shadow-xl p-1 z-50 animate-in fade-in-50">
                 {(["FR", "EN", "EWE", "KABYE"] as SupportedLanguage[]).map((l) => (
                   <button
                     key={l}
@@ -271,7 +286,9 @@ export default function LgfHeader({
                         : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-emerald-900/50"
                     }`}
                   >
-                    <span>{l === "FR" ? "Français" : l === "EN" ? "English" : l}</span>
+                    <span>
+                      {l === "FR" ? "Français 🇫🇷" : l === "EN" ? "English 🇬🇧" : l === "EWE" ? "Éwé (Eʋegbe) 🇹🇬" : "Kabyè (Kabɩyɛ) 🇹🇬"}
+                    </span>
                     {lang === l && <Check className="w-3.5 h-3.5 text-emerald-600" />}
                   </button>
                 ))}
@@ -280,7 +297,7 @@ export default function LgfHeader({
           </div>
 
           {/* Currency Dropdown */}
-          <div className="relative hidden lg:block">
+          <div ref={currencyDropdownRef} className="relative hidden lg:block">
             <button
               type="button"
               onClick={() => setShowCurrencyDropdown(!showCurrencyDropdown)}
@@ -329,7 +346,7 @@ export default function LgfHeader({
 
           {/* User Account / Connexion */}
           {user ? (
-            <div className="relative">
+            <div ref={userMenuRef} className="relative">
               <button
                 type="button"
                 onClick={() => setShowUserMenu(!showUserMenu)}
@@ -439,62 +456,71 @@ export default function LgfHeader({
       </div>
 
       {/* 3. SUB-HEADER / CATEGORY NAVIGATION BAR */}
-      <div className="bg-slate-50 dark:bg-emerald-900/40 border-t border-slate-200 dark:border-emerald-800/40 px-4 sm:px-6 lg:px-8 py-2 text-xs font-bold text-slate-700 dark:text-emerald-200 flex items-center justify-between overflow-x-auto scrollbar-none gap-4">
+      <div className="bg-slate-100 dark:bg-emerald-950 border-t border-b border-slate-200 dark:border-emerald-800/60 px-4 sm:px-6 lg:px-8 py-2 text-xs font-extrabold text-slate-900 dark:text-emerald-100 flex items-center justify-between gap-3 shadow-xs relative z-30">
         
         {/* Left: Category Menu Dropdown & Quick Category Tabs */}
-        <div className="flex items-center space-x-3 whitespace-nowrap">
+        <div className="flex items-center space-x-3 min-w-0">
           
           {/* "Toutes les catégories" Dropdown Trigger */}
-          <div className="relative">
+          <div className="relative shrink-0" ref={categoryDropdownRef}>
             <button
               type="button"
               onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-              className="bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold px-3.5 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 shadow-sm cursor-pointer transition-all"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white font-black px-3.5 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 shadow-sm cursor-pointer transition-all active:scale-95"
             >
               <Menu className="w-3.5 h-3.5" />
-              <span>Toutes les catégories</span>
+              <span>{t.allCategories || "Toutes les catégories"}</span>
               <ChevronDown className="w-3 h-3" />
             </button>
 
             {showCategoryDropdown && (
-              <div className="absolute left-0 mt-2 w-56 bg-white dark:bg-emerald-950 border border-slate-200 dark:border-emerald-800 rounded-2xl shadow-2xl p-2 z-50 text-xs">
-                {CATEGORIES.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => {
-                      setSelectedCategory(cat);
-                      setShowCategoryDropdown(false);
-                      const catEl = document.getElementById("public-catalog") || document.getElementById("buyer-portal");
-                      if (catEl) catEl.scrollIntoView({ behavior: "smooth" });
-                    }}
-                    className={`w-full text-left px-3 py-2 rounded-xl font-bold transition-all flex items-center justify-between cursor-pointer ${
-                      selectedCategory === cat
-                        ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
-                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-emerald-900/50"
-                    }`}
-                  >
-                    <span>{cat}</span>
-                    {selectedCategory === cat && <Check className="w-3.5 h-3.5 text-emerald-600" />}
-                  </button>
-                ))}
-              </div>
+              <>
+                {/* Transparent backdrop overlay on screen to close dropdown on tap outside */}
+                <div 
+                  className="fixed inset-0 z-[90] bg-slate-950/20 backdrop-blur-[1px]" 
+                  onClick={() => setShowCategoryDropdown(false)} 
+                />
+
+                {/* Category Dropdown Menu Box */}
+                <div className="absolute left-0 top-full mt-2 w-64 bg-white dark:bg-emerald-950 border-2 border-emerald-500 dark:border-emerald-600 rounded-2xl shadow-2xl p-2 z-[100] text-xs max-h-[75vh] overflow-y-auto">
+                  {CATEGORIES.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => {
+                        setSelectedCategory(cat);
+                        setShowCategoryDropdown(false);
+                        const catEl = document.getElementById("catalog-section") || document.getElementById("public-catalog") || document.getElementById("buyer-portal");
+                        if (catEl) catEl.scrollIntoView({ behavior: "smooth" });
+                      }}
+                      className={`w-full text-left px-3.5 py-2.5 rounded-xl font-extrabold transition-all flex items-center justify-between cursor-pointer ${
+                        selectedCategory === cat
+                          ? "bg-emerald-600 text-white shadow-md"
+                          : "text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-emerald-900/80"
+                      }`}
+                    >
+                      <span>{cat}</span>
+                      {selectedCategory === cat && <Check className="w-4 h-4 text-white" />}
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
           </div>
 
-          {/* Direct Category Quick Links */}
-          <div className="flex items-center space-x-1 sm:space-x-2">
+          {/* Direct Category Quick Links (Scrollable Container) */}
+          <div className="flex items-center space-x-1 sm:space-x-1.5 overflow-x-auto scrollbar-none py-0.5 whitespace-nowrap min-w-0">
             {["Électronique", "Mode Homme", "Mode Femme", "Maison & Cuisine", "Beauté & Santé"].map((cat) => (
               <button
                 key={cat}
                 onClick={() => {
                   setSelectedCategory(cat);
-                  const catEl = document.getElementById("public-catalog") || document.getElementById("buyer-portal");
+                  const catEl = document.getElementById("catalog-section") || document.getElementById("public-catalog") || document.getElementById("buyer-portal");
                   if (catEl) catEl.scrollIntoView({ behavior: "smooth" });
                 }}
                 className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
                   selectedCategory === cat
-                    ? "bg-emerald-600 text-white font-extrabold shadow-sm"
-                    : "text-slate-700 dark:text-emerald-200 hover:bg-slate-200/70 dark:hover:bg-emerald-800/50 font-bold"
+                    ? "bg-emerald-600 text-white font-black shadow-sm"
+                    : "text-slate-900 dark:text-emerald-100 hover:bg-slate-200 dark:hover:bg-emerald-800/60 font-extrabold"
                 }`}
               >
                 {cat}
@@ -505,29 +531,29 @@ export default function LgfHeader({
         </div>
 
         {/* Right Quick Action Shortcuts */}
-        <div className="flex items-center space-x-3 shrink-0 whitespace-nowrap text-xs font-extrabold">
+        <div className="flex items-center space-x-3 shrink-0 whitespace-nowrap text-xs font-black">
           <button
             onClick={() => onOpenFlashDeals ? onOpenFlashDeals() : null}
-            className="flex items-center space-x-1 text-amber-600 dark:text-amber-400 hover:underline cursor-pointer bg-amber-50 dark:bg-amber-950/60 px-2.5 py-1 rounded-xl border border-amber-200 dark:border-amber-800"
+            className="flex items-center space-x-1 text-amber-950 dark:text-amber-300 hover:underline cursor-pointer bg-amber-400/20 dark:bg-amber-950/80 px-3 py-1 rounded-xl border border-amber-400/60 dark:border-amber-700 shadow-2xs"
           >
-            <Tag className="w-3.5 h-3.5 text-amber-500" />
-            <span>Ventes Flash</span>
+            <Tag className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <span>{t.flashDeals || "Ventes Flash"}</span>
           </button>
 
           <button
             onClick={() => onOpenVendorPortal ? onOpenVendorPortal() : null}
-            className="flex items-center space-x-1 text-slate-700 dark:text-emerald-200 hover:text-emerald-600 cursor-pointer"
+            className="flex items-center space-x-1 text-slate-900 dark:text-emerald-100 hover:text-emerald-700 dark:hover:text-amber-300 cursor-pointer"
           >
             <Store className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Vendre sur LGF</span>
+            <span>{t.sellOnLgf || "Vendre sur LGF"}</span>
           </button>
 
           <button
             onClick={() => onOpenTrackOrders ? onOpenTrackOrders() : null}
-            className="hidden sm:flex items-center space-x-1 text-slate-700 dark:text-emerald-200 hover:text-emerald-600 cursor-pointer"
+            className="hidden sm:flex items-center space-x-1 text-slate-900 dark:text-emerald-100 hover:text-emerald-700 dark:hover:text-amber-300 cursor-pointer"
           >
             <Truck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Suivre ma commande</span>
+            <span>{t.trackOrder || "Suivre ma commande"}</span>
           </button>
         </div>
 

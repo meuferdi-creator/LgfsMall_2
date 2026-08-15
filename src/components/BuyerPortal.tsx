@@ -2,15 +2,18 @@ import React, { useState, useEffect } from "react";
 import { ShoppingBag, Plus, Clock, Search, CheckCircle2, Lock, AlertCircle, Heart } from "lucide-react";
 import { Product, Order } from "../types";
 import ProductCard from "./ProductCard";
-import tmoneyQrImage from "../assets/images/tmoney_merchant_qr_1784541339901.jpg";
 import { useAppStore } from "../store";
+import { translations } from "../translations";
 import ProductDetailModal from "./ProductDetailModal";
+import StoreModal from "./StoreModal";
 import CartDrawer from "./CartDrawer";
 import FacetedSearchPanel, { FacetedFilterState } from "./FacetedSearchPanel";
 import EcobankPaymentCard from "./EcobankPaymentCard";
+import TMoneyPaymentCard from "./TMoneyPaymentCard";
 import WishlistSection from "./WishlistSection";
 import HomePageSections from "./HomePageSections";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence } from "framer-motion";
+import { isCategoryMatch } from "../utils/categoryMatcher";
 
 interface BuyerPortalProps {
   products: Product[];
@@ -23,6 +26,8 @@ interface BuyerPortalProps {
   initialProductId?: string;
   initialQuantity?: number;
   initialTab?: "catalog" | "favorites" | "order" | "history";
+  externalCategory?: string;
+  externalSearch?: string;
 }
 
 export default function BuyerPortal({
@@ -35,7 +40,9 @@ export default function BuyerPortal({
   isLoading,
   initialProductId,
   initialQuantity,
-  initialTab
+  initialTab,
+  externalCategory,
+  externalSearch
 }: BuyerPortalProps) {
   const { 
     cart, 
@@ -44,12 +51,25 @@ export default function BuyerPortal({
     removeFromCart, 
     updateCartQuantity, 
     clearCart, 
-    toggleWishlist 
+    toggleWishlist,
+    lang
   } = useAppStore();
+  const t = translations[lang] || translations.FR;
 
   const [selectedModalProduct, setSelectedModalProduct] = useState<Product | null>(null);
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const [isPlacingCartOrders, setIsPlacingCartOrders] = useState(false);
+
+  // Store modal state
+  const [selectedStoreVendorId, setSelectedStoreVendorId] = useState<string | null>(null);
+  const [selectedStoreName, setSelectedStoreName] = useState<string | null>(null);
+  const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
+
+  const handleOpenStore = (vendorId: string, storeName: string) => {
+    setSelectedStoreVendorId(vendorId);
+    setSelectedStoreName(storeName);
+    setIsStoreModalOpen(true);
+  };
 
   const [buyerTab, setBuyerTab] = useState<"catalog" | "favorites" | "order" | "history">(initialTab || "catalog");
 
@@ -93,6 +113,20 @@ export default function BuyerPortal({
     window.history.replaceState(null, "", newUrl);
   }, [facetedFilters]);
 
+  // Sync external category changes from header / subheader
+  useEffect(() => {
+    if (externalCategory !== undefined) {
+      setFacetedFilters((prev) => ({ ...prev, category: externalCategory }));
+    }
+  }, [externalCategory]);
+
+  // Sync external search changes from header
+  useEffect(() => {
+    if (externalSearch !== undefined) {
+      setFacetedFilters((prev) => ({ ...prev, search: externalSearch }));
+    }
+  }, [externalSearch]);
+
   // Filter & Sort Products dynamically
   const filteredProducts = products
     .filter((p) => {
@@ -103,8 +137,7 @@ export default function BuyerPortal({
         p.description.toLowerCase().includes(query) ||
         p.category.toLowerCase().includes(query);
 
-      const matchesCategory =
-        facetedFilters.category === "Tous" || p.category === facetedFilters.category;
+      const matchesCategory = isCategoryMatch(p.category, facetedFilters.category);
 
       const vendorName = p.vendor?.name || "Boutique d'Assigamé";
       const matchesVendor =
@@ -148,6 +181,7 @@ export default function BuyerPortal({
 
   const [orderProductId, setOrderProductId] = useState(initialProductId || "");
   const [orderQty, setOrderQty] = useState(initialQuantity || 1);
+  const [orderColor, setOrderColor] = useState("");
   const [orderPaymentMethod, setOrderPaymentMethod] = useState("TMoney");
   const [orderPhone, setOrderPhone] = useState("");
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -344,12 +378,14 @@ export default function BuyerPortal({
                     <ProductCard
                       product={p}
                       formatCurrency={formatCurrency}
-                      onBuy={(productId, qty) => {
+                      onBuy={(productId, qty, color) => {
                         setOrderProductId(productId);
                         setOrderQty(qty);
+                        if (color) setOrderColor(color);
                         setBuyerTab("order");
                       }}
                       onOpenDetail={(product) => setSelectedModalProduct(product)}
+                      onOpenStore={handleOpenStore}
                     />
                   </motion.div>
                 ))}
@@ -361,13 +397,21 @@ export default function BuyerPortal({
           <HomePageSections
             products={products}
             formatCurrency={formatCurrency}
-            onSelectCategory={(cat) => setFacetedFilters((prev) => ({ ...prev, selectedCategory: cat }))}
-            onBuyProduct={(productId, qty) => {
+            onSelectCategory={(cat) => {
+              setFacetedFilters((prev) => ({ ...prev, category: cat }));
+              const catEl = document.getElementById("catalog-section") || document.getElementById("public-catalog") || document.getElementById("buyer-portal");
+              if (catEl) {
+                catEl.scrollIntoView({ behavior: "smooth" });
+              }
+            }}
+            onBuyProduct={(productId, qty, color) => {
               setOrderProductId(productId);
               setOrderQty(qty);
+              if (color) setOrderColor(color);
               setBuyerTab("order");
             }}
             onOpenDetail={(product) => setSelectedModalProduct(product)}
+            onOpenStore={handleOpenStore}
           />
         </div>
       )}
@@ -628,39 +672,11 @@ export default function BuyerPortal({
               </div>
             </div>
 
-            {/* Ecobank Payment Card or TMoney Merchant Section */}
+            {/* Ecobank Payment Card or TMoney / Flooz Merchant Section */}
             {orderPaymentMethod === "Ecobank" || orderPaymentMethod === "Card" ? (
               <EcobankPaymentCard amount={totalPrice} formatCurrency={formatCurrency} onSuccess={handleConfirmPayment} />
             ) : (
-              <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-4 space-y-4 text-center">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider font-mono block">Instructions de Paiement {orderPaymentMethod}</span>
-                  <p className="text-[11px] text-emerald-950 font-semibold leading-normal">
-                    Veuillez scanner le code ci-dessous depuis votre application {orderPaymentMethod} ou composer le code USSD ci-dessous.
-                  </p>
-                </div>
-
-                {/* QR Code */}
-                <div className="bg-white p-3 rounded-2xl border border-amber-200 inline-block mx-auto shadow-sm">
-                  <img
-                    src={tmoneyQrImage}
-                    alt="TMoney Merchant QR Code Lgf's Shop"
-                    referrerPolicy="no-referrer"
-                    className="w-48 h-auto mx-auto object-contain rounded-lg"
-                  />
-                  <div className="text-[10px] font-mono text-emerald-800 mt-2 font-bold tracking-wider">
-                    Numéro Marchand : 1355124 (Lgf's Shop)
-                  </div>
-                </div>
-
-                {/* USSD Box */}
-                <div className="bg-white px-3 py-2 rounded-xl border border-amber-200 flex flex-col items-center justify-center font-mono">
-                  <span className="text-[8px] text-amber-600 font-bold uppercase tracking-wider">Dialer Code USSD ({orderPaymentMethod}) :</span>
-                  <span className="text-xs font-black text-amber-800 tracking-wider select-all mt-0.5">
-                    *145*5*{totalPrice}*1355124#
-                  </span>
-                </div>
-              </div>
+              <TMoneyPaymentCard amount={totalPrice} method={orderPaymentMethod} formatCurrency={formatCurrency} onSuccess={handleConfirmPayment} />
             )}
 
             <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 text-[10px] text-emerald-800 leading-normal">
@@ -722,8 +738,30 @@ export default function BuyerPortal({
           }}
           isInWishlist={wishlist.includes(selectedModalProduct.id)}
           onToggleWishlist={toggleWishlist}
+          onOpenStore={handleOpenStore}
         />
       )}
+
+      {/* Boutique Store Modal */}
+      <StoreModal
+        isOpen={isStoreModalOpen}
+        onClose={() => setIsStoreModalOpen(false)}
+        vendorId={selectedStoreVendorId}
+        storeName={selectedStoreName}
+        products={products}
+        formatCurrency={formatCurrency}
+        onBuyProduct={(productId, qty, color) => {
+          setIsStoreModalOpen(false);
+          setOrderProductId(productId);
+          setOrderQty(qty);
+          if (color) setOrderColor(color);
+          setBuyerTab("order");
+        }}
+        onOpenDetail={(product) => {
+          setIsStoreModalOpen(false);
+          setSelectedModalProduct(product);
+        }}
+      />
 
       {/* Multi-Vendor Cart Drawer */}
       <CartDrawer

@@ -3,6 +3,7 @@ import { Truck, MapPin, Wallet, CheckCircle2, AlertCircle, Phone, FileText, Lock
 import { Order } from "../types";
 import { calculateRoute } from "../lib/maps";
 import { firestoreSync } from "../lib/firebase";
+import NotificationBanner from "./NotificationBanner";
 
 interface DriverPortalProps {
   user: any;
@@ -52,7 +53,7 @@ export default function DriverPortal({ user, formatCurrency, isLoading }: Driver
   const fetchDispatched = async () => {
     setLocalLoading(true);
     try {
-      const token = localStorage.getItem("lgf_mall_token");
+      const token = localStorage.getItem("lgf_token");
       const res = await fetch("/api/orders/dispatched", {
         headers: {
           Authorization: `Bearer ${token}`
@@ -75,7 +76,7 @@ export default function DriverPortal({ user, formatCurrency, isLoading }: Driver
 
   const handleClaim = async (orderId: string) => {
     try {
-      const token = localStorage.getItem("lgf_mall_token");
+      const token = localStorage.getItem("lgf_token");
       const res = await fetch(`/api/orders/${orderId}/claim`, {
         method: "POST",
         headers: {
@@ -102,7 +103,7 @@ export default function DriverPortal({ user, formatCurrency, isLoading }: Driver
     }
 
     try {
-      const token = localStorage.getItem("lgf_mall_token");
+      const token = localStorage.getItem("lgf_token");
       const res = await fetch(`/api/orders/${orderId}/mark-delivered`, {
         method: "POST",
         headers: {
@@ -200,15 +201,12 @@ export default function DriverPortal({ user, formatCurrency, isLoading }: Driver
 
       {/* Message feedback */}
       {message && (
-        <div className={`p-4 rounded-xl border text-xs flex items-center space-x-2 ${
-          message.type === "success" 
-            ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
-            : "bg-rose-50 border-rose-200 text-rose-800"
-        }`}>
-          {message.type === "success" ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
-          <div className="flex-1 font-medium">{message.text}</div>
-          <button onClick={() => setMessage(null)} className="text-emerald-950 font-bold hover:underline cursor-pointer">OK</button>
-        </div>
+        <NotificationBanner
+          message={message.text}
+          type={message.type}
+          onClose={() => setMessage(null)}
+          autoDismissMs={8000}
+        />
       )}
 
       {/* Tab Panels */}

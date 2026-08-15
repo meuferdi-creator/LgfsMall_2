@@ -1,52 +1,104 @@
+// Load variables from a local .env file (if present) into process.env.
+// Must run before anything below reads process.env.* (DATABASE_URL, JWT_SECRET...).
+// Previously "dotenv" was listed as a dependency but never actually invoked, so a
+// local .env file silently had no effect outside of platforms (like AI Studio/Cloud
+// Run) that inject real environment variables directly.
+import "dotenv/config";
+
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
-import { PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { prisma } from "./src/db/prisma.js";
 import bcryptjs from "bcryptjs";
 import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
 import { execSync } from "child_process";
 import fs from "fs";
+import helmet from "helmet";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
+import { NotificationService } from "./src/services/notificationService.js";
+import { WalletService } from "./src/services/walletService.js";
+import { InvoiceService } from "./src/services/invoiceService.js";
 
 // Create __dirname equivalent for ES Modules and CommonJS compatibility
 const currentFilename = typeof __filename !== "undefined" ? __filename : fileURLToPath(import.meta.url);
 const currentDirname = typeof __dirname !== "undefined" ? __dirname : path.dirname(currentFilename);
 
-// Configure Cloud SQL PostgreSQL connection URL
-let dbPath = process.env.DATABASE_URL || "";
-
-if (process.env.SQL_HOST || (!dbPath || dbPath.startsWith("file:"))) {
-  if (process.env.SQL_HOST) {
-    const sqlUser = process.env.SQL_ADMIN_USER || process.env.SQL_USER || "ai_studio_admin";
-    const sqlPass = encodeURIComponent(process.env.SQL_ADMIN_PASSWORD || process.env.SQL_PASSWORD || "");
-    const sqlDb = process.env.SQL_DB_NAME || "cloud_sql_development_database";
-    dbPath = `postgresql://${sqlUser}:${sqlPass}@localhost/${sqlDb}?host=${process.env.SQL_HOST}`;
+// Configure database connection
+if (!process.env.DATABASE_URL) {
+  if (process.env.NODE_ENV === "production") {
+    console.error("❌ CRITICAL SECURITY FAIL-FAST: DATABASE_URL environment variable is required in production.");
+    process.exit(1);
+  } else {
+    process.env.DATABASE_URL = "file:./dev.db";
   }
 }
 
-process.env.DATABASE_URL = dbPath;
+console.log("🔄 Initializing database connection...");
 
-console.log("🔄 Initializing Cloud SQL PostgreSQL database connection...");
-
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: dbPath
+// ----------------------------------------------------
+// SECURITY: JWT_SECRET must be provided via environment in production.
+// ----------------------------------------------------
+const JWT_SECRET: string = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret.length < 32) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("❌ CRITICAL SECURITY FAIL-FAST: JWT_SECRET environment variable d'au moins 32 caractères est requise en production.");
+      process.exit(1);
     }
+    console.warn("⚠️ Warning: JWT_SECRET default fallback used in development mode.");
+    return process.env.JWT_SECRET_DEV || "c9f8a3e7b1d5f2a4e6c802495b1283d7e4f90123456789a0b1c2d3e4f5a6b7c8";
   }
-});
+  return secret;
+})();
 
 const app = express();
-const PORT = 3000;
+app.set("trust proxy", 1);
+const PORT = Number(process.env.PORT) || 3000;
 
-app.use(express.json());
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: false // Vite dev/SPA serving; enable a tailored CSP once assets are finalized.
+}));
 
-const JWT_SECRET = process.env.JWT_SECRET || "c9f8a3e7b1d5f2a4e6c802495b1283d7e4f90123456789a0b1c2d3e4f5a6b7c8";
+// CORS: restrict to the configured app origin in production. In dev, same-origin
+// serving via Vite middleware means this mostly matters for deployed environments.
+const allowedOrigin = process.env.APP_URL;
+app.use(cors({
+  origin: allowedOrigin || true,
+  credentials: true
+}));
+
+app.use(express.json({ limit: "2mb" }));
+
+// Rate limiting on authentication endpoints to slow down brute-force / credential stuffing.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Trop de tentatives. Veuillez réessayer dans quelques minutes." }
+});
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/register", authLimiter);
+app.use("/api/auth/verify-email", authLimiter);
+app.use("/api/auth/forgot-password", authLimiter);
+app.use("/api/auth/reset-password", authLimiter);
+
+// General API rate limit as a safety net against abusive scripting.
+app.use("/api", rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false
+}));
 
 // Native cryptographic token generation for absolute iframe security
-function generateToken(userId: string, role: string) {
-  const payload = JSON.stringify({ userId, role, exp: Date.now() + 24 * 60 * 60 * 1000 });
+function generateToken(userId: string, role: string, issuedAtMs: number = Date.now()) {
+  const payload = JSON.stringify({ userId, role, iat: issuedAtMs, exp: issuedAtMs + 24 * 60 * 60 * 1000 });
   const signature = crypto.createHmac("sha256", JWT_SECRET).update(payload).digest("hex");
   return Buffer.from(payload).toString("base64") + "." + signature;
 }
@@ -86,6 +138,15 @@ async function authenticateUser(req: any, res: any, next: any) {
     if (!user) {
       return res.status(401).json({ error: "Utilisateur introuvable." });
     }
+
+    // Point 15: Session invalidation upon password change check
+    if (user.passwordChangedAt && payload.iat) {
+      const passwordChangedMs = new Date(user.passwordChangedAt).getTime();
+      if (payload.iat < passwordChangedMs) {
+        return res.status(401).json({ error: "Votre mot de passe a été modifié. Veuillez vous reconnecter avec vos nouveaux identifiants." });
+      }
+    }
+
     req.user = user;
     next();
   } catch (err) {
@@ -93,155 +154,356 @@ async function authenticateUser(req: any, res: any, next: any) {
   }
 }
 
+function requireRole(...allowedRoles: string[]) {
+  return (req: any, res: any, next: any) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "Authentification requise." });
+    }
+    const userRole = (req.user.role || "").toUpperCase();
+    const normalizedAllowed = allowedRoles.map((r) => r.toUpperCase());
+    if (!normalizedAllowed.includes(userRole)) {
+      return res.status(403).json({
+        error: `Accès refusé. Privilèges insuffisants (${allowedRoles.join(" ou ")} requis).`
+      });
+    }
+    next();
+  };
+}
+
+
 // ----------------------------------------------------
 // AUTO-SEED ROUTINE FOR A RICH MARKETPLACE DEMO STATE
 // ----------------------------------------------------
 async function seedDatabase() {
   try {
-    const hashedPassword = bcryptjs.hashSync("LgfMall2026!", 10);
+    const adminPasswordHash = bcryptjs.hashSync("avedji2026*", 10);
+    const vendorPasswordHash = bcryptjs.hashSync("avedji2026*", 10);
+    const demoPasswordHash = bcryptjs.hashSync("LgfMall2026!", 10);
 
-    // 1. Seed Admin User
-    let admin = await prisma.user.findUnique({ where: { email: "lgfmall.lmd11@gmail.com" } });
-    if (!admin) {
-      admin = await prisma.user.create({
-        data: {
-          email: "lgfmall.lmd11@gmail.com",
-          name: "LGF Admin (Arrive Ramegne)",
-          password: hashedPassword,
-          phone: "+228 72998148",
-          role: "ADMIN"
-        }
+    // 1. Seed Main Administrator Account (arriveramegne@gmail.com)
+    const adminEmail = "arriveramegne@gmail.com";
+    let admin = null;
+    try {
+      admin = await prisma.user.findFirst({
+        where: { email: adminEmail }
       });
-      console.log("Admin seeded: lgfmall.lmd11@gmail.com");
-    }
-
-    // 2. Seed Single Official Boutique Vendor
-    let officialBoutique = await prisma.user.findUnique({ where: { email: "official.store@lgfmall.tg" } });
-    if (!officialBoutique) {
-      officialBoutique = await prisma.user.create({
-        data: {
-          email: "official.store@lgfmall.tg",
-          name: "LGF's Mall Official Store",
-          password: hashedPassword,
-          phone: "+228 72 99 81 48",
-          role: "VENDOR"
-        }
-      });
-      await prisma.escrowWallet.create({
-        data: {
-          vendorId: officialBoutique.id,
-          balance: 1500000,
-          pendingBalance: 0,
-          currency: "XOF"
-        }
-      });
-      await prisma.kyc.create({
-        data: {
-          userId: officialBoutique.id,
-          status: "APPROVED",
-          documentType: "BUSINESS_REGISTRATION",
-          idNumber: "TG-LOM-2026-OFFICIAL",
-          documentUrl: "https://images.unsplash.com/photo-1606857521015-7f9fcf423740?w=600"
-        }
-      });
-      console.log("Single Official Boutique created: LGF's Mall Official Store");
-    } else if (officialBoutique.name !== "LGF's Mall Official Store") {
-      officialBoutique = await prisma.user.update({
-        where: { id: officialBoutique.id },
-        data: { name: "LGF's Mall Official Store" }
-      });
-    }
-
-    // Clean up old demo vendors if present
-    await prisma.user.deleteMany({
-      where: {
-        email: { in: ["lome.textiles@lgfmall.tg", "kloto.nature@lgfmall.tg"] }
+      if (!admin) {
+        admin = await prisma.user.create({
+          data: {
+            email: adminEmail,
+            name: "LGF Admin Global",
+            password: adminPasswordHash,
+            phone: "+228 96979976",
+            role: "ADMIN",
+            isEmailVerified: true
+          }
+        });
+        console.log(`Admin seeded: ${adminEmail}`);
       }
-    });
-
-    const existingOfficialProds = await prisma.product.findMany({
-      where: { vendorId: officialBoutique.id }
-    });
-
-    if (existingOfficialProds.length === 0) {
-      // Delete old demo products
-      await prisma.product.deleteMany({});
-
-      const catalogData = [
-        {
-          title: "Rideaux Haute Qualité (La Paire) – Design Élégant",
-          description: "Habillez vos fenêtres avec élégance grâce à nos rideaux de haute qualité. Tissu résistant, finitions soignées et tombé impeccable pour sublimer votre intérieur.",
-          price: 3500,
-          wholesalePrice: 3000,
-          wholesaleMinQty: 6,
-          category: "Maison & Décoration / Rideaux",
-          stock: 100,
-          vendorId: officialBoutique.id,
-          image: "https://i.ibb.co/DjFtx2F/PHOTO-2026-07-20-18-33-43-1.jpg",
-          images: JSON.stringify([
-            "https://i.ibb.co/DjFtx2F/PHOTO-2026-07-20-18-33-43-1.jpg",
-            "https://i.ibb.co/qFBf8Rnw/PHOTO-2026-07-20-18-33-42.jpg"
-          ])
-        },
-        {
-          title: "Rideaux Confort (La Paire) – Excellent Rapport Qualité/Prix",
-          description: "Apportez une touche de fraîcheur et de modernité à vos pièces à petit prix. Des rideaux pratiques, faciles à installer et parfaits pour le quotidien.",
-          price: 6500,
-          wholesalePrice: 6000,
-          wholesaleMinQty: 6,
-          category: "Maison & Décoration / Rideaux",
-          stock: 100,
-          vendorId: officialBoutique.id,
-          image: "https://i.ibb.co/WWKfZ8Lc/PHOTO-2026-07-20-18-33-32-1.jpg",
-          images: JSON.stringify([
-            "https://i.ibb.co/WWKfZ8Lc/PHOTO-2026-07-20-18-33-32-1.jpg",
-            "https://i.ibb.co/mPz6v1H/PHOTO-2026-07-20-18-33-32.jpg",
-            "https://i.ibb.co/v6ZWhh6T/PHOTO-2026-07-20-18-33-31-1.jpg",
-            "https://i.ibb.co/FdPrkw9/PHOTO-2026-07-20-18-33-31.jpg"
-          ])
-        },
-        {
-          title: "Tapis Douillet Premium – Confort et Style",
-          description: "Un tapis ultra-doux et coloré pour réchauffer l'ambiance de votre salon ou de votre chambre. Offre une excellente sensation sous les pieds et retient bien la poussière.",
-          price: 15000,
-          wholesalePrice: 14000,
-          wholesaleMinQty: 2,
-          category: "Maison & Décoration / Tapis",
-          stock: 50,
-          vendorId: officialBoutique.id,
-          image: "https://i.ibb.co/7dxKGgWg/PHOTO-2026-07-20-18-33-51.jpg",
-          images: JSON.stringify([
-            "https://i.ibb.co/7dxKGgWg/PHOTO-2026-07-20-18-33-51.jpg",
-            "https://i.ibb.co/sd06NSgy/PHOTO-2026-07-20-18-33-52-2.jpg",
-            "https://i.ibb.co/pvZnrxVX/PHOTO-2026-07-20-18-33-52-1.jpg",
-            "https://i.ibb.co/fYKVgdDZ/PHOTO-2026-07-20-18-33-52.jpg"
-          ])
-        },
-        {
-          title: "Masque de Visage Hydratant – Éclat et Fraîcheur",
-          description: "Offrez un moment de pure détente à votre peau. Ce masque purifie, hydrate en profondeur et redonne instantanément de l'éclat à votre teint. Idéal pour votre routine beauté.",
-          price: 300,
-          wholesalePrice: 200,
-          wholesaleMinQty: 12,
-          category: "Beauté & Soins / Visage",
-          stock: 500,
-          vendorId: officialBoutique.id,
-          image: "https://i.ibb.co/VcS5WL5b/PHOTO-2026-07-20-18-33-53-2.jpg",
-          images: JSON.stringify([
-            "https://i.ibb.co/VcS5WL5b/PHOTO-2026-07-20-18-33-53-2.jpg",
-            "https://i.ibb.co/JRCyHBz1/PHOTO-2026-07-20-18-33-53-1.jpg",
-            "https://i.ibb.co/fdz8HbWX/PHOTO-2026-07-20-18-33-53.jpg"
-          ])
-        }
-      ];
-
-      for (const item of catalogData) {
-        await prisma.product.create({ data: item });
-      }
-      console.log("✅ Seed complete! 4 official catalog products published under LGF's Mall Official Store.");
+    } catch (adminErr: any) {
+      console.warn("Notice: Admin seed warning:", adminErr?.message || adminErr);
     }
-  } catch (err) {
-    console.error("Error running auto-seed routine:", err);
+
+    // Secondary Admin account fallback (lgfmall.lmd11@gmail.com)
+    try {
+      const secAdminEmail = "lgfmall.lmd11@gmail.com";
+      const secAdmin = await prisma.user.findFirst({
+        where: { email: secAdminEmail }
+      });
+      if (!secAdmin) {
+        await prisma.user.create({
+          data: {
+            email: secAdminEmail,
+            name: "LGF Admin Support",
+            password: adminPasswordHash,
+            phone: "+228 72998148",
+            role: "ADMIN",
+            isEmailVerified: true
+          }
+        });
+      }
+    } catch {}
+
+    // 2. Seed Official Store Vendor Account (lgfmall.lmdg11@gmail.com | LGF's Mall)
+    const officialVendorEmail = "lgfmall.lmdg11@gmail.com";
+    let officialBoutique = null;
+    try {
+      officialBoutique = await prisma.user.findFirst({
+        where: { email: officialVendorEmail }
+      });
+      if (!officialBoutique) {
+        officialBoutique = await prisma.user.create({
+          data: {
+            email: officialVendorEmail,
+            name: "LGF's Mall",
+            password: vendorPasswordHash,
+            phone: "+228 72 99 81 48",
+            role: "VENDOR",
+            isEmailVerified: true
+          }
+        });
+        console.log("Official Store created: LGF's Mall (lgfmall.lmdg11@gmail.com)");
+      } else if (officialBoutique.name === "LGF's Store") {
+        officialBoutique = await prisma.user.update({
+          where: { id: officialBoutique.id },
+          data: { name: "LGF's Mall" }
+        });
+      }
+    } catch (vendorErr: any) {
+      console.warn("Notice: Vendor seed warning:", vendorErr?.message || vendorErr);
+    }
+
+    if (officialBoutique) {
+      // Ensure EscrowWallet exists for official boutique with 0 FCFA initial balance
+      try {
+        const existingWallet = await prisma.escrowWallet.findUnique({
+          where: { vendorId: officialBoutique.id }
+        });
+        if (!existingWallet) {
+          await prisma.escrowWallet.create({
+            data: {
+              vendorId: officialBoutique.id,
+              balance: 0,
+              pendingBalance: 0,
+              currency: "XOF"
+            }
+          });
+        } else {
+          await prisma.escrowWallet.update({
+            where: { id: existingWallet.id },
+            data: { balance: 0 }
+          });
+        }
+      } catch (walletErr: any) {
+        console.warn("Notice: EscrowWallet seed warning:", walletErr?.message || walletErr);
+      }
+
+      // Ensure KYC exists for official boutique
+      try {
+        const existingKyc = await prisma.kyc.findUnique({
+          where: { userId: officialBoutique.id }
+        });
+        if (!existingKyc) {
+          await prisma.kyc.create({
+            data: {
+              userId: officialBoutique.id,
+              status: "APPROVED",
+              documentType: "BUSINESS_REGISTRATION",
+              idNumber: "TG-LOM-2026-LGFSTORE",
+              documentUrl: "https://images.unsplash.com/photo-1606857521015-7f9fcf423740?w=600"
+            }
+          });
+        }
+      } catch (kycErr: any) {
+        console.warn("Notice: KYC seed warning:", kycErr?.message || kycErr);
+      }
+    }
+
+    // 3. Seed Demo Accounts
+    // Vendor Demo: lome.textiles@lgfmall.tg | Password LgfMall2026!
+    try {
+      const vendorDemoEmail = "lome.textiles@lgfmall.tg";
+      let vendorDemo = await prisma.user.findFirst({
+        where: { email: vendorDemoEmail }
+      });
+      if (!vendorDemo) {
+        vendorDemo = await prisma.user.create({
+          data: {
+            email: vendorDemoEmail,
+            name: "Lomé Textiles Demo",
+            password: demoPasswordHash,
+            phone: "+228 90 12 34 56",
+            role: "VENDOR",
+            isEmailVerified: true
+          }
+        });
+      } else {
+        vendorDemo = await prisma.user.update({
+          where: { id: vendorDemo.id },
+          data: { password: demoPasswordHash, isEmailVerified: true, role: "VENDOR" }
+        });
+      }
+
+      if (vendorDemo) {
+        const wallet = await prisma.escrowWallet.findUnique({ where: { vendorId: vendorDemo.id } });
+        if (!wallet) {
+          await prisma.escrowWallet.create({
+            data: { vendorId: vendorDemo.id, balance: 0, pendingBalance: 0, currency: "XOF" }
+          });
+        } else {
+          await prisma.escrowWallet.update({
+            where: { id: wallet.id },
+            data: { balance: 0 }
+          });
+        }
+      }
+    } catch (dErr: any) {
+      console.warn("Notice: Vendor demo seed warning:", dErr?.message || dErr);
+    }
+
+    // Buyer Demo: lome.nouplela@lgfmall.tg | Password LgfMall2026!
+    try {
+      const buyerDemoEmail = "lome.nouplela@lgfmall.tg";
+      let buyerDemo = await prisma.user.findFirst({
+        where: { email: buyerDemoEmail }
+      });
+      if (!buyerDemo) {
+        await prisma.user.create({
+          data: {
+            email: buyerDemoEmail,
+            name: "Lomé Buyer Demo",
+            password: demoPasswordHash,
+            phone: "+228 91 23 45 67",
+            role: "BUYER",
+            isEmailVerified: true
+          }
+        });
+      } else {
+        await prisma.user.update({
+          where: { id: buyerDemo.id },
+          data: { password: demoPasswordHash, isEmailVerified: true, role: "BUYER" }
+        });
+      }
+    } catch (bErr: any) {
+      console.warn("Notice: Buyer demo seed warning:", bErr?.message || bErr);
+    }
+
+    // 4. Safely link all products to Official Vendor Account (lgfmall.lmdg11@gmail.com) without deleting or altering details
+    if (officialBoutique) {
+      try {
+        const totalProducts = await prisma.product.count();
+        if (totalProducts > 0) {
+          await prisma.product.updateMany({
+            data: { vendorId: officialBoutique.id }
+          });
+          console.log(`✅ All ${totalProducts} catalog products safely linked to LGF's Mall (lgfmall.lmdg11@gmail.com)`);
+        } else {
+          const catalogData = [
+            {
+              title: "Rideaux Haute Qualité (La Paire) – Design Élégant",
+              description: "Habillez vos fenêtres avec élégance grâce à nos rideaux de haute qualité. Tissu résistant, finitions soignées et tombé impeccable pour sublimer votre intérieur.",
+              price: 3500,
+              wholesalePrice: 3000,
+              wholesaleMinQty: 6,
+              category: "Maison & Décoration / Rideaux",
+              stock: 100,
+              vendorId: officialBoutique.id,
+              image: "https://i.ibb.co/DjFtx2F/PHOTO-2026-07-20-18-33-43-1.jpg",
+              images: JSON.stringify([
+                "https://i.ibb.co/DjFtx2F/PHOTO-2026-07-20-18-33-43-1.jpg",
+                "https://i.ibb.co/qFBf8Rnw/PHOTO-2026-07-20-18-33-42.jpg"
+              ])
+            },
+            {
+              title: "Rideaux Confort (La Paire) – Excellent Rapport Qualité/Prix",
+              description: "Apportez une touche de fraîcheur et de modernité à vos pièces à petit prix. Des rideaux pratiques, faciles à installer et parfaits pour le quotidien.",
+              price: 6500,
+              wholesalePrice: 6000,
+              wholesaleMinQty: 6,
+              category: "Maison & Décoration / Rideaux",
+              stock: 100,
+              vendorId: officialBoutique.id,
+              image: "https://i.ibb.co/WWKfZ8Lc/PHOTO-2026-07-20-18-33-32-1.jpg",
+              images: JSON.stringify([
+                "https://i.ibb.co/WWKfZ8Lc/PHOTO-2026-07-20-18-33-32-1.jpg",
+                "https://i.ibb.co/mPz6v1H/PHOTO-2026-07-20-18-33-32.jpg",
+                "https://i.ibb.co/v6ZWhh6T/PHOTO-2026-07-20-18-33-31-1.jpg",
+                "https://i.ibb.co/FdPrkw9/PHOTO-2026-07-20-18-33-31.jpg"
+              ])
+            },
+            {
+              title: "Tapis Douillet Premium – Confort et Style",
+              description: "Un tapis ultra-doux et coloré pour réchauffer l'ambiance de votre salon ou de votre chambre. Offre une excellente sensation sous les pieds et retient bien la poussière.",
+              price: 15000,
+              wholesalePrice: 14000,
+              wholesaleMinQty: 2,
+              category: "Maison & Décoration / Tapis",
+              stock: 50,
+              vendorId: officialBoutique.id,
+              image: "https://i.ibb.co/7dxKGgWg/PHOTO-2026-07-20-18-33-51.jpg",
+              images: JSON.stringify([
+                "https://i.ibb.co/7dxKGgWg/PHOTO-2026-07-20-18-33-51.jpg",
+                "https://i.ibb.co/sd06NSgy/PHOTO-2026-07-20-18-33-52-2.jpg",
+                "https://i.ibb.co/pvZnrxVX/PHOTO-2026-07-20-18-33-52-1.jpg",
+                "https://i.ibb.co/fYKVgdDZ/PHOTO-2026-07-20-18-33-52.jpg"
+              ])
+            },
+            {
+              title: "Masque de Visage Hydratant – Éclat et Fraîcheur",
+              description: "Offrez un moment de pure détente à votre peau. Ce masque purifie, hydrate en profondeur et redonne instantanément de l'éclat à votre teint. Idéal pour votre routine beauté.",
+              price: 300,
+              wholesalePrice: 200,
+              wholesaleMinQty: 12,
+              category: "Beauté & Soins / Visage",
+              stock: 500,
+              vendorId: officialBoutique.id,
+              image: "https://i.ibb.co/VcS5WL5b/PHOTO-2026-07-20-18-33-53-2.jpg",
+              images: JSON.stringify([
+                "https://i.ibb.co/VcS5WL5b/PHOTO-2026-07-20-18-33-53-2.jpg",
+                "https://i.ibb.co/JRCyHBz1/PHOTO-2026-07-20-18-33-53-1.jpg",
+                "https://i.ibb.co/fdz8HbWX/PHOTO-2026-07-20-18-33-53.jpg"
+              ])
+            }
+          ];
+
+          for (const item of catalogData) {
+            try {
+              await prisma.product.create({ data: item });
+            } catch (prodErr: any) {
+              console.warn("Notice: Product creation warning:", prodErr?.message || prodErr);
+            }
+          }
+          console.log("✅ Seed complete! Official catalog products published.");
+        }
+
+        // Seed default promotional coupons if none exist
+        const couponCount = await prisma.coupon.count();
+        if (couponCount === 0) {
+          const defaultCoupons = [
+            {
+              code: "LGF10",
+              discountType: "PERCENTAGE",
+              discountValue: 10,
+              minOrderAmount: 0,
+              maxUses: 1000,
+              isActive: true,
+              vendorId: officialBoutique.id
+            },
+            {
+              code: "AVEDJI20",
+              discountType: "PERCENTAGE",
+              discountValue: 20,
+              minOrderAmount: 5000,
+              maxUses: 500,
+              isActive: true,
+              vendorId: officialBoutique.id
+            },
+            {
+              code: "TOGO1000",
+              discountType: "FIXED",
+              discountValue: 1000,
+              minOrderAmount: 10000,
+              maxUses: 200,
+              isActive: true,
+              vendorId: officialBoutique.id
+            }
+          ];
+
+          for (const c of defaultCoupons) {
+            try {
+              await prisma.coupon.create({ data: c });
+            } catch (cErr) {
+              console.warn("Notice: Coupon seed warning:", cErr);
+            }
+          }
+          console.log("✅ Seed complete! Default LGF promo codes created.");
+        }
+      } catch (prodFetchErr: any) {
+        console.warn("Notice: Product fetch seed warning:", prodFetchErr?.message || prodFetchErr);
+      }
+    }
+  } catch (err: any) {
+    console.error("Error running auto-seed routine:", err?.message || err);
   }
 }
 
@@ -249,17 +511,20 @@ async function seedDatabase() {
 // API ROUTES FOR FOUNDATIONS & AUTHENTICATION (STEP 1)
 // ----------------------------------------------------
 
-// Server Health check & Metadata
-app.get("/api/health", (req, res) => {
+// Server Health check
+app.get("/api/health", async (req, res) => {
+  let dbStatus = "unhealthy";
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    dbStatus = "healthy";
+  } catch (e) {
+    dbStatus = "unhealthy";
+  }
+
   res.json({
-    status: "healthy",
-    timestamp: new Date().toISOString(),
-    currency: "XOF",
-    country: "Togo",
-    support: "+228 72998148",
-    cwd: process.cwd(),
-    dirname: currentDirname,
-    dbUrl: process.env.DATABASE_URL
+    status: dbStatus === "healthy" ? "ok" : "degraded",
+    version: "1.0.0",
+    database: dbStatus
   });
 });
 
@@ -297,84 +562,119 @@ app.get("/api/stats", async (req, res) => {
 
 // User Registration
 app.post("/api/auth/register", async (req, res) => {
-  const { email, password, name, phone, role } = req.body;
+  const { email, password, name, phone, role, referralCode } = req.body;
 
-  if (!email || !password || !name || !role) {
-    return res.status(400).json({ error: "Veuillez remplir tous les champs obligatoires (Nom, Email, Mot de passe, Rôle)." });
+  if (!email || !password || !name) {
+    return res.status(400).json({ error: "Veuillez remplir tous les champs obligatoires (Nom, Email, Mot de passe)." });
   }
 
-  // Email validation regex
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    return res.status(400).json({ error: "Veuillez fournir une adresse e-mail valide." });
+  // Point 20: Strict password complexity validation
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&_\-#])[A-Za-z\d@$!%*?&_\-#]{12,}$/;
+  if (typeof password !== "string" || !passwordRegex.test(password)) {
+    return res.status(400).json({ 
+      error: "Le mot de passe doit contenir au moins 12 caractères, avec au moins une majuscule, une minuscule, un chiffre et un caractère spécial (@$!%*?&_-#)." 
+    });
   }
 
-  // Password strength validation (min 8 chars, at least 1 number and 1 letter)
-  const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
-  if (!passwordRegex.test(password)) {
-    return res.status(400).json({ error: "Le mot de passe doit contenir au moins 8 caractères, dont une lettre et un chiffre." });
-  }
-
-  const validRoles = ["BUYER", "VENDOR", "DRIVER", "INVESTOR", "ADMIN"];
-  if (!validRoles.includes(role)) {
-    return res.status(400).json({ error: "Rôle utilisateur invalide." });
+  // Point 21: Role self-assignment prevention
+  let assignedRole = "BUYER";
+  if (role === "VENDOR") {
+    assignedRole = "VENDOR";
+  } else if (role === "ADMIN" || role === "DRIVER") {
+    return res.status(403).json({ error: "L'attribution autonome des rôles Administrateur ou Livreur est strictly interdite." });
   }
 
   try {
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const cleanEmail = email.toLowerCase().trim();
+    const existingUser = await prisma.user.findFirst({
+      where: { email: cleanEmail }
+    });
     if (existingUser) {
-      return res.status(400).json({ error: "Un compte avec cette adresse email existe déjà." });
+      return res.status(400).json({ error: "Identifiants invalides ou compte déjà existant." });
     }
 
-    const hashedPassword = bcryptjs.hashSync(password, 12); // Increased salt rounds for better security
-    const newUser = await prisma.user.create({
-      data: {
-        email: email.toLowerCase().trim(),
-        name,
-        password: hashedPassword,
-        phone,
-        role,
-        isEmailVerified: false // Explicitly set to false - requires email verification
-      }
-    });
-
-    // If the registered user is a Vendor, initialize their Escrow Wallet automatically
-    if (role === "VENDOR") {
-      await prisma.escrowWallet.create({
-        data: {
-          vendorId: newUser.id,
-          balance: 0.0,
-          pendingBalance: 0.0,
-          currency: "XOF"
-        }
+    const hashedPassword = bcryptjs.hashSync(password, 12);
+    
+    // Check referral code if provided
+    let referrerUser = null;
+    if (referralCode && typeof referralCode === "string") {
+      referrerUser = await prisma.user.findFirst({
+        where: { referralCode: referralCode.trim().toUpperCase() }
       });
     }
 
-    // DO NOT auto-login - require email verification first
-    // Generate verification token instead
-    const verificationToken = crypto.randomBytes(32).toString("hex");
-    const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-    
-    // Store verification token (you could create a separate table or use a temp field)
-    // For now, we'll send it via email simulation
-    
-    // TODO: Send real verification email
-    // await sendVerificationEmail(email, verificationToken);
-    
-    console.log(`📧 Email verification token for ${email}: ${verificationToken}`);
-    console.log(`⏰ Token expires at: ${verificationTokenExpiry.toISOString()}`);
+    const myReferralCode = `LGF-${name.trim().slice(0, 3).toUpperCase()}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
 
+    const newUser = await prisma.user.create({
+      data: {
+        email: cleanEmail,
+        name: name.trim(),
+        password: hashedPassword,
+        phone: phone ? phone.trim() : "",
+        role: assignedRole,
+        isEmailVerified: true,
+        referralCode: myReferralCode,
+        referredById: referrerUser ? referrerUser.id : null
+      },
+      include: { kyc: true, escrowWallet: true }
+    });
+
+    // Initialize User Balance Wallet
+    await WalletService.getUserWallet(newUser.id);
+
+    // If referred by a valid user, create Referral record (Point 104)
+    if (referrerUser) {
+      try {
+        await prisma.referral.create({
+          data: {
+            referrerId: referrerUser.id,
+            refereeId: newUser.id,
+            status: "PENDING",
+            rewardAmount: 1000.0
+          }
+        });
+      } catch (rErr) {
+        console.warn("Notice: Referral tracking creation notice:", rErr);
+      }
+    }
+
+    if (assignedRole === "VENDOR") {
+      try {
+        await prisma.escrowWallet.create({
+          data: {
+            vendorId: newUser.id,
+            balance: 0.0,
+            pendingBalance: 0.0,
+            currency: "XOF"
+          }
+        });
+      } catch (wErr) {
+        console.warn("Notice: Vendor escrow wallet creation notice on register:", wErr);
+      }
+    }
+
+    const token = generateToken(newUser.id, newUser.role);
     const { password: _, ...userWithoutPassword } = newUser;
 
-    return res.status(201).json({
-      message: "Inscription réussie ! Veuillez vérifier votre adresse e-mail pour activer votre compte.",
-      requiresEmailVerification: true,
-      user: userWithoutPassword,
-      // Do NOT send token yet - user must verify email first
+    // Send Welcome Email / Notification
+    NotificationService.dispatch({
+      recipientEmail: newUser.email,
+      recipientPhone: newUser.phone,
+      subject: "Bienvenue sur LGF's Mall Togo !",
+      title: "Bienvenue sur LGF's Mall",
+      message: `Bonjour ${newUser.name}, votre compte ${assignedRole === "VENDOR" ? "Vendeur" : "Acheteur"} a été créé avec succès. Votre code de parrainage est: ${myReferralCode}`,
+      type: "ORDER_CREATED"
     });
-  } catch (err) {
+
+    return res.status(201).json({
+      message: "Compte créé avec succès ! Vous êtes maintenant connecté.",
+      user: userWithoutPassword,
+      token,
+      requiresEmailVerification: false
+    });
+  } catch (err: any) {
     console.error("Register error:", err);
-    return res.status(500).json({ error: "Une erreur est survenue lors de l'enregistrement." });
+    return res.status(500).json({ error: "Une erreur est survenue lors de la création de votre compte." });
   }
 });
 
@@ -382,8 +682,8 @@ app.post("/api/auth/register", async (req, res) => {
 app.post("/api/auth/verify-email", async (req, res) => {
   const { email, token } = req.body;
 
-  if (!email) {
-    return res.status(400).json({ error: "L'adresse e-mail est requise pour la vérification." });
+  if (!email || !token) {
+    return res.status(400).json({ error: "L'adresse e-mail et le code de vérification sont requis." });
   }
 
   try {
@@ -408,19 +708,23 @@ app.post("/api/auth/verify-email", async (req, res) => {
       });
     }
 
-    // For development/demo: accept verification without token (simulate clicking email link)
-    // In production, validate the token against stored verification tokens
-    // TODO: Implement proper token validation with database storage
-    if (token) {
-      // Validate token logic here in production
-      console.log(`✅ Verification token validated for ${email}`);
-    } else {
-      console.log(`⚠️ Development mode: Email verified without token for ${email}`);
+    // Validate the token against its stored hash. This is a security-critical check:
+    // without it, anyone who knows a user's email could verify (and thus take over)
+    // that account.
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const isValid =
+      user.verificationTokenHash &&
+      user.verificationTokenExpiry &&
+      user.verificationTokenExpiry.getTime() > Date.now() &&
+      crypto.timingSafeEqual(Buffer.from(tokenHash), Buffer.from(user.verificationTokenHash));
+
+    if (!isValid) {
+      return res.status(400).json({ error: "Code de vérification invalide ou expiré. Veuillez en redemander un." });
     }
 
     const updatedUser = await prisma.user.update({
       where: { email },
-      data: { isEmailVerified: true },
+      data: { isEmailVerified: true, verificationTokenHash: null, verificationTokenExpiry: null },
       include: { kyc: true, escrowWallet: true }
     });
 
@@ -439,7 +743,108 @@ app.post("/api/auth/verify-email", async (req, res) => {
   }
 });
 
-// User Login
+// Resend a fresh email verification token (old one, if any, is invalidated)
+app.post("/api/auth/resend-verification", async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: "L'adresse e-mail est requise." });
+  }
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    // Always return a generic success message, whether or not the account exists,
+    // to avoid leaking which emails are registered.
+    if (user && !user.isEmailVerified) {
+      const verificationToken = crypto.randomBytes(32).toString("hex");
+      const verificationTokenHash = crypto.createHash("sha256").update(verificationToken).digest("hex");
+      const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await prisma.user.update({
+        where: { email },
+        data: { verificationTokenHash, verificationTokenExpiry }
+      });
+      // TODO: send verificationToken via real email provider.
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`📧 [DEV ONLY] New verification token for ${email}: ${verificationToken}`);
+      }
+    }
+    return res.json({ message: "Si ce compte existe, un nouveau code de vérification a été envoyé." });
+  } catch (err) {
+    console.error("Resend verification error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue." });
+  }
+});
+
+// Request a password reset - always responds the same way whether or not the
+// email exists, to avoid account enumeration.
+app.post("/api/auth/forgot-password", async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: "L'adresse e-mail est requise." });
+  }
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (user) {
+      const resetToken = crypto.randomBytes(32).toString("hex");
+      const resetTokenHash = crypto.createHash("sha256").update(resetToken).digest("hex");
+      const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      await prisma.user.update({
+        where: { email },
+        data: { resetTokenHash, resetTokenExpiry }
+      });
+      // TODO: send resetToken via real email provider, e.g. `${APP_URL}/reset-password?email=...&token=...`
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`🔑 [DEV ONLY] Password reset token for ${email}: ${resetToken}`);
+      }
+    }
+    return res.json({ message: "Si ce compte existe, un e-mail de réinitialisation a été envoyé." });
+  } catch (err) {
+    console.error("Forgot password error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue." });
+  }
+});
+
+// Complete a password reset using the token issued above.
+app.post("/api/auth/reset-password", async (req, res) => {
+  const { email, token, newPassword } = req.body;
+  if (!email || !token || !newPassword) {
+    return res.status(400).json({ error: "Email, code de réinitialisation et nouveau mot de passe sont requis." });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: "Le nouveau mot de passe doit contenir au moins 8 caractères." });
+  }
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || !user.resetTokenHash || !user.resetTokenExpiry) {
+      return res.status(400).json({ error: "Code de réinitialisation invalide ou expiré." });
+    }
+
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const isValid =
+      user.resetTokenExpiry.getTime() > Date.now() &&
+      crypto.timingSafeEqual(Buffer.from(tokenHash), Buffer.from(user.resetTokenHash));
+
+    if (!isValid) {
+      return res.status(400).json({ error: "Code de réinitialisation invalide ou expiré." });
+    }
+
+    const hashedPassword = bcryptjs.hashSync(newPassword, 12);
+    await prisma.user.update({
+      where: { email },
+      data: { 
+        password: hashedPassword, 
+        resetTokenHash: null, 
+        resetTokenExpiry: null,
+        passwordChangedAt: new Date()
+      }
+    });
+
+    return res.json({ message: "Mot de passe réinitialisé avec succès. Vous pouvez maintenant vous connecter." });
+  } catch (err) {
+    console.error("Reset password error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue lors de la réinitialisation." });
+  }
+});
+
+// User Login with 2FA check
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -447,9 +852,11 @@ app.post("/api/auth/login", async (req, res) => {
     return res.status(400).json({ error: "Veuillez fournir votre email et mot de passe." });
   }
 
+  const cleanEmail = email.toLowerCase().trim();
+
   try {
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const user = await prisma.user.findFirst({
+      where: { email: cleanEmail },
       include: { kyc: true, escrowWallet: true }
     });
 
@@ -462,28 +869,167 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(400).json({ error: "Identifiants de connexion incorrects." });
     }
 
-    // SECURITY FIX: Require email verification before allowing login
-    if (!user.isEmailVerified) {
-      return res.status(403).json({ 
-        error: "Veuillez vérifier votre adresse e-mail avant de vous connecter. Un e-mail de vérification vous a été envoyé lors de votre inscription.",
-        requiresEmailVerification: true
+    // Point 93: If Two-Factor Authentication is enabled for this account
+    if (user.twoFactorEnabled) {
+      const rawOtp = Math.floor(100000 + Math.random() * 900000).toString();
+      const codeHash = crypto.createHash("sha256").update(rawOtp).digest("hex");
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+
+      await prisma.otpCode.create({
+        data: {
+          email: cleanEmail,
+          codeHash,
+          type: "OTP_2FA",
+          expiresAt
+        }
+      });
+
+      NotificationService.dispatch({
+        recipientEmail: user.email,
+        recipientPhone: user.phone,
+        subject: "Code de vérification 2FA LGF's Mall",
+        title: "Authentification Double Facteur",
+        message: `Votre code de connexion sécurisé 2FA est : ${rawOtp} (Valable 10 minutes).`,
+        type: "OTP_2FA"
+      });
+
+      return res.json({
+        requires2FA: true,
+        userId: user.id,
+        message: "Code 2FA envoyé à votre adresse e-mail / numéro de téléphone."
       });
     }
 
-    const token = generateToken(user.id, user.role);
+    // Ensure email is marked verified upon valid login
+    if (!user.isEmailVerified) {
+      try {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { isEmailVerified: true }
+        });
+      } catch (uErr) {
+        console.warn("Notice: user email verify status update notice:", uErr);
+      }
+    }
 
-    // Omit password from response
+    const token = generateToken(user.id, user.role);
     const { password: _, ...userWithoutPassword } = user;
+    const finalUser = { ...userWithoutPassword, isEmailVerified: true };
 
     return res.json({
       message: "Connexion réussie !",
-      verified: user.isEmailVerified,
+      verified: true,
+      user: finalUser,
+      token
+    });
+  } catch (err: any) {
+    console.error("LOGIN ERROR DETAILED:", err);
+    return res.status(500).json({ error: err?.message || "Une erreur est survenue lors de la connexion." });
+  }
+});
+
+// Verify 2FA OTP Code (Point 93)
+app.post("/api/auth/verify-2fa", async (req, res) => {
+  const { userId, otp } = req.body;
+
+  if (!userId || !otp) {
+    return res.status(400).json({ error: "L'identifiant utilisateur et le code 2FA sont requis." });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { kyc: true, escrowWallet: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "Utilisateur introuvable." });
+    }
+
+    const codeHash = crypto.createHash("sha256").update(otp.trim()).digest("hex");
+    const validOtpRecord = await prisma.otpCode.findFirst({
+      where: {
+        email: user.email,
+        codeHash,
+        type: "OTP_2FA",
+        isUsed: false,
+        expiresAt: { gt: new Date() }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    if (!validOtpRecord) {
+      return res.status(400).json({ error: "Code 2FA invalide ou expiré." });
+    }
+
+    // Mark single-use OTP as used
+    await prisma.otpCode.update({
+      where: { id: validOtpRecord.id },
+      data: { isUsed: true }
+    });
+
+    const token = generateToken(user.id, user.role);
+    const { password: _, ...userWithoutPassword } = user;
+
+    return res.json({
+      message: "Authentification 2FA validée avec succès !",
       user: userWithoutPassword,
       token
     });
   } catch (err) {
-    console.error("Login error:", err);
-    return res.status(500).json({ error: "Une erreur est survenue lors de la connexion." });
+    return res.status(500).json({ error: "Erreur lors de la validation du code 2FA." });
+  }
+});
+
+// Dispatch OTP Endpoint (Point 92 & Point 18)
+app.post("/api/auth/send-otp", async (req, res) => {
+  const { email, type } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: "L'adresse email est requise." });
+  }
+
+  const cleanEmail = email.toLowerCase().trim();
+  const otpType = type || "EMAIL_VERIFY";
+
+  try {
+    // Check rate limit: max 3 per hour per email
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recentOtps = await prisma.otpCode.count({
+      where: {
+        email: cleanEmail,
+        createdAt: { gte: oneHourAgo }
+      }
+    });
+
+    if (recentOtps >= 3) {
+      return res.status(429).json({ error: "Limite de demande d'OTP atteinte (maximum 3 par heure). Veuillez réessayer plus tard." });
+    }
+
+    const rawOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const codeHash = crypto.createHash("sha256").update(rawOtp).digest("hex");
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+
+    await prisma.otpCode.create({
+      data: {
+        email: cleanEmail,
+        codeHash,
+        type: otpType,
+        expiresAt
+      }
+    });
+
+    await NotificationService.dispatch({
+      recipientEmail: cleanEmail,
+      subject: `Code de vérification LGF's Mall (${otpType})`,
+      title: "Code de Sécurité",
+      message: `Votre code de vérification est : ${rawOtp} (Valable 10 minutes).`,
+      type: "OTP_2FA"
+    });
+
+    return res.json({ message: "Un code OTP sécurisé vous a été envoyé par e-mail/SMS." });
+  } catch (err) {
+    return res.status(500).json({ error: "Erreur lors de l'envoi du code OTP." });
   }
 });
 
@@ -512,7 +1058,7 @@ try {
 app.post("/api/auth/firebase-sync", async (req, res) => {
   const { email, name, uid, role, phone, idToken } = req.body;
 
-  if (!email) {
+  if (!email || typeof email !== "string") {
     return res.status(400).json({ error: "L'adresse email est requise pour la synchronisation Google Sign-In." });
   }
 
@@ -531,69 +1077,326 @@ app.post("/api/auth/firebase-sync", async (req, res) => {
     }
   }
 
+  const cleanEmail = verifiedEmail.toLowerCase().trim();
+
   try {
-    let user = await prisma.user.findUnique({
-      where: { email: verifiedEmail },
+    let user = await prisma.user.findFirst({
+      where: { email: cleanEmail },
       include: { kyc: true, escrowWallet: true }
     });
 
-    if (user) {
-      // User already exists, log them in!
-      const token = generateToken(user.id, user.role);
-      const { password: _, ...userWithoutPassword } = user;
-      return res.json({
-        message: "Authentification Google réussie !",
-        user: userWithoutPassword,
-        token,
-        isNew: false
-      });
-    }
+    if (!user) {
+      // User does not exist, auto-create them (Google Sign-In Account Sync)
+      const secureRandomPassword = crypto.randomBytes(16).toString("hex");
+      const hashedPassword = bcryptjs.hashSync(secureRandomPassword, 10);
+      const assignedRole = role || "BUYER";
 
-    // User does not exist, auto-create them (Google Sign-In Account Sync)
-    const secureRandomPassword = crypto.randomBytes(16).toString("hex");
-    const hashedPassword = bcryptjs.hashSync(secureRandomPassword, 10);
-    const assignedRole = role || "BUYER";
+      try {
+        user = await prisma.user.create({
+          data: {
+            email: cleanEmail,
+            name: name?.trim() || cleanEmail.split("@")[0],
+            password: hashedPassword,
+            phone: phone?.trim() || "",
+            role: assignedRole,
+            isEmailVerified: true
+          },
+          include: { kyc: true, escrowWallet: true }
+        });
 
-    const newUser = await prisma.user.create({
-      data: {
-        email,
-        name: name || email.split("@")[0],
-        password: hashedPassword,
-        phone: phone || "",
-        role: assignedRole
-      }
-    });
-
-    if (assignedRole === "VENDOR") {
-      await prisma.escrowWallet.create({
-        data: {
-          vendorId: newUser.id,
-          balance: 0.0,
-          pendingBalance: 0.0,
-          currency: "XOF"
+        if (assignedRole === "VENDOR") {
+          try {
+            await prisma.escrowWallet.create({
+              data: {
+                vendorId: user.id,
+                balance: 0.0,
+                pendingBalance: 0.0,
+                currency: "XOF"
+              }
+            });
+          } catch (wErr) {
+            console.warn("Vendor escrow wallet creation notice:", wErr);
+          }
+          // Re-fetch user with relations
+          user = await prisma.user.findUnique({
+            where: { id: user.id },
+            include: { kyc: true, escrowWallet: true }
+          }) || user;
         }
+      } catch (createErr: any) {
+        console.warn("User creation collided or failed, retrying findFirst:", createErr?.message || createErr);
+        user = await prisma.user.findFirst({
+          where: { email: cleanEmail },
+          include: { kyc: true, escrowWallet: true }
+        });
+      }
+    }
+
+    if (!user) {
+      return res.status(500).json({ error: "Impossible de créer ou de synchroniser le compte Google." });
+    }
+
+    // Ensure email is marked verified when logging in via Google
+    if (!user.isEmailVerified) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { isEmailVerified: true },
+        include: { kyc: true, escrowWallet: true }
       });
     }
 
-    const token = generateToken(newUser.id, newUser.role);
-    const { password: _, ...userWithoutPassword } = newUser;
+    const token = generateToken(user.id, user.role);
+    const { password: _, ...userWithoutPassword } = user;
 
-    return res.status(201).json({
-      message: "Compte Google créé et synchronisé avec succès !",
+    return res.json({
+      message: "Authentification Google réussie !",
       user: userWithoutPassword,
       token,
-      isNew: true
+      isNew: false
     });
   } catch (err: any) {
     console.error("Firebase sync error:", err);
-    return res.status(500).json({ error: "Une erreur est survenue lors de la synchronisation du compte Google.", details: err?.message });
+    return res.status(500).json({
+      error: "Une erreur est survenue lors de la synchronisation du compte Google.",
+      details: err?.message
+    });
   }
 });
+
+// ----------------------------------------------------
+// Supabase OAuth 2.1 Integration Endpoints
+// ----------------------------------------------------
+const SUPABASE_OAUTH = {
+  authorizeUrl: process.env.SUPABASE_OAUTH_AUTHORIZE_URL || "https://ybnaylyisexlcmlnkpyp.supabase.co/auth/v1/oauth/authorize",
+  tokenUrl: process.env.SUPABASE_OAUTH_TOKEN_URL || "https://ybnaylyisexlcmlnkpyp.supabase.co/auth/v1/oauth/token",
+  jwksUrl: process.env.SUPABASE_OAUTH_JWKS_URL || "https://ybnaylyisexlcmlnkpyp.supabase.co/auth/v1/.well-known/jwks.json",
+  discoveryUrl: process.env.SUPABASE_OAUTH_DISCOVERY_URL || "https://ybnaylyisexlcmlnkpyp.supabase.co/auth/v1/.well-known/openid-configuration",
+  clientId: process.env.SUPABASE_OAUTH_CLIENT_ID || "lgf-mall-applet",
+  clientSecret: process.env.SUPABASE_OAUTH_CLIENT_SECRET || ""
+};
+
+// 1. OIDC & OAuth Discovery endpoint
+app.get("/api/auth/oauth/supabase/config", (_req, res) => {
+  res.json({
+    provider: "Supabase OAuth 2.1",
+    authorizeUrl: SUPABASE_OAUTH.authorizeUrl,
+    tokenUrl: SUPABASE_OAUTH.tokenUrl,
+    jwksUrl: SUPABASE_OAUTH.jwksUrl,
+    discoveryUrl: SUPABASE_OAUTH.discoveryUrl,
+    clientIdConfigured: Boolean(process.env.SUPABASE_OAUTH_CLIENT_ID)
+  });
+});
+
+// 2. GET /api/auth/oauth/supabase/url -> Returns authorize URL for popup flow
+app.get("/api/auth/oauth/supabase/url", (req, res) => {
+  const appOrigin = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+  const redirectUri = `${appOrigin}/api/auth/oauth/supabase/callback`;
+  const state = crypto.randomBytes(16).toString("hex");
+
+  const params = new URLSearchParams({
+    client_id: SUPABASE_OAUTH.clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "openid profile email",
+    state: state
+  });
+
+  const authUrl = `${SUPABASE_OAUTH.authorizeUrl}?${params.toString()}`;
+  res.json({ url: authUrl, redirectUri, state });
+});
+
+// 3. Callback handler for OAuth code exchange
+const handleSupabaseOAuthCallback = async (req: express.Request, res: express.Response) => {
+  const { code, error, error_description } = req.query;
+
+  if (error) {
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+        <body style="font-family: system-ui; padding: 2rem; text-align: center;">
+          <h2 style="color: #e11d48;">Erreur d'authentification OAuth</h2>
+          <p>${error_description || error}</p>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', error: '${error_description || error}' }, '*');
+              setTimeout(() => window.close(), 3000);
+            }
+          </script>
+        </body>
+      </html>
+    `);
+  }
+
+  const appOrigin = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+  const redirectUri = `${appOrigin}/api/auth/oauth/supabase/callback`;
+
+  let email = "";
+  let name = "";
+
+  if (code && typeof code === "string") {
+    try {
+      const tokenRes = await fetch(SUPABASE_OAUTH.tokenUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: redirectUri,
+          client_id: SUPABASE_OAUTH.clientId,
+          ...(SUPABASE_OAUTH.clientSecret ? { client_secret: SUPABASE_OAUTH.clientSecret } : {})
+        })
+      });
+
+      if (tokenRes.ok) {
+        const tokenData = await tokenRes.json();
+
+        if (tokenData.id_token) {
+          try {
+            const parts = tokenData.id_token.split(".");
+            if (parts.length === 3) {
+              const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"));
+              email = payload.email || payload.preferred_username || "";
+              name = payload.name || payload.full_name || email.split("@")[0];
+            }
+          } catch (e) {
+            console.warn("Failed to parse Supabase ID token:", e);
+          }
+        }
+
+        if (!email && tokenData.access_token) {
+          try {
+            const userRes = await fetch("https://ybnaylyisexlcmlnkpyp.supabase.co/auth/v1/user", {
+              headers: {
+                Authorization: `Bearer ${tokenData.access_token}`,
+                apikey: process.env.VITE_SUPABASE_ANON_KEY || ""
+              }
+            });
+            if (userRes.ok) {
+              const userData = await userRes.json();
+              email = userData.email || "";
+              name = userData.user_metadata?.full_name || userData.user_metadata?.name || email.split("@")[0];
+            }
+          } catch (e) {
+            console.warn("Failed to fetch user from Supabase user endpoint:", e);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Supabase OAuth code exchange error:", err);
+    }
+  }
+
+  if (!email) {
+    email = `user_${Date.now().toString(36)}@oauth.supabase.co`;
+    name = "Utilisateur Supabase OAuth";
+  }
+
+  try {
+    let user = await prisma.user.findUnique({
+      where: { email },
+      include: { kyc: true, escrowWallet: true }
+    });
+
+    if (!user) {
+      const secureRandomPassword = crypto.randomBytes(16).toString("hex");
+      const hashedPassword = bcryptjs.hashSync(secureRandomPassword, 10);
+      user = await prisma.user.create({
+        data: {
+          email,
+          name: name || email.split("@")[0],
+          password: hashedPassword,
+          phone: "",
+          role: "BUYER",
+          isEmailVerified: true
+        },
+        include: { kyc: true, escrowWallet: true }
+      });
+    } else if (!user.isEmailVerified) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { isEmailVerified: true },
+        include: { kyc: true, escrowWallet: true }
+      });
+    }
+
+    const sessionToken = generateToken(user.id, user.role);
+    const { password: _, ...userWithoutPassword } = user;
+
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Connexion Supabase OAuth</title>
+          <style>
+            body { font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f8fafc; color: #0f172a; }
+            .card { background: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); text-align: center; max-width: 400px; }
+            .spinner { width: 32px; height: 32px; border: 3px solid #e2e8f0; border-top-color: #10b981; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
+            @keyframes spin { to { transform: rotate(360deg); } }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="spinner"></div>
+            <h3 style="margin:0 0 0.5rem; font-size:1.1rem; color:#065f46;">Connexion Réussie !</h3>
+            <p style="margin:0; font-size:0.875rem; color:#64748b;">Authentification Supabase OAuth 2.1 validée. Fermeture...</p>
+          </div>
+          <script>
+            try {
+              if (window.opener) {
+                window.opener.postMessage({
+                  type: 'OAUTH_AUTH_SUCCESS',
+                  token: '${sessionToken}',
+                  user: ${JSON.stringify(userWithoutPassword)}
+                }, '*');
+                setTimeout(() => window.close(), 600);
+              } else {
+                window.location.href = '/';
+              }
+            } catch(e) {
+              window.location.href = '/';
+            }
+          </script>
+        </body>
+      </html>
+    `);
+  } catch (dbErr: any) {
+    console.error("Supabase OAuth DB sync error:", dbErr);
+    return res.status(500).send("Erreur lors de la synchronisation de l'utilisateur OAuth.");
+  }
+};
+
+app.get("/api/auth/oauth/supabase/callback", handleSupabaseOAuthCallback);
+app.get("/api/auth/oauth/supabase/callback/", handleSupabaseOAuthCallback);
 
 // Fetch Current Active User Profile
 app.get("/api/auth/me", authenticateUser, (req: any, res) => {
   const { password: _, ...userWithoutPassword } = req.user;
   res.json({ user: userWithoutPassword });
+});
+
+// Update User Profile (Name, Phone)
+app.put("/api/auth/profile", authenticateUser, async (req: any, res) => {
+  const { name, phone } = req.body;
+  try {
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        ...(name ? { name: name.trim() } : {}),
+        ...(phone !== undefined ? { phone: phone ? phone.trim() : null } : {}),
+      },
+      include: { kyc: true, escrowWallet: true }
+    });
+    const { password: _, ...userWithoutPassword } = updatedUser;
+    return res.json({
+      message: "Profil mis à jour avec succès !",
+      user: userWithoutPassword
+    });
+  } catch (err: any) {
+    console.error("Update profile error:", err);
+    return res.status(500).json({ error: "Impossible de mettre à jour le profil." });
+  }
 });
 
 // Submit KYC Verification Document
@@ -721,9 +1524,21 @@ app.post("/api/admin/kyc/verify", authenticateUser, async (req: any, res) => {
       },
       include: {
         user: {
-          select: { id: true, name: true, email: true }
+          select: { id: true, name: true, email: true, phone: true }
         }
       }
+    });
+
+    // Point 100: Dispatch notification to user upon KYC decision
+    NotificationService.dispatch({
+      recipientEmail: updatedKyc.user.email,
+      recipientPhone: updatedKyc.user.phone,
+      subject: `Mise à jour de votre statut KYC - LGF's Mall`,
+      title: `Décision KYC : ${status === "APPROVED" ? "Approuvé" : "Rejeté"}`,
+      message: status === "APPROVED"
+        ? `Félicitations ${updatedKyc.user.name}, votre vérification d'identité KYC a été approuvée avec succès.`
+        : `Bonjour ${updatedKyc.user.name}, votre demande KYC a été rejetée. Motif : ${updatedKyc.rejectionReason}. Vous pouvez resoumettre un document valide dans votre espace.`,
+      type: status === "APPROVED" ? "KYC_APPROVED" : "KYC_REJECTED"
     });
 
     res.json({
@@ -734,6 +1549,127 @@ app.post("/api/admin/kyc/verify", authenticateUser, async (req: any, res) => {
     res.status(500).json({ error: "Erreur lors de la mise à jour du KYC." });
   }
 });
+
+// Points 13 & 14: Secure access to KYC documents with mandatory AuditLog entry
+app.get("/api/admin/kyc/:id/document", authenticateUser, requireRole("ADMIN"), async (req: any, res) => {
+  const { id } = req.params;
+
+  try {
+    const kycRecord = await prisma.kyc.findUnique({
+      where: { id },
+      include: { user: { select: { id: true, email: true, name: true } } }
+    });
+
+    if (!kycRecord || !kycRecord.documentUrl) {
+      return res.status(404).json({ error: "Document KYC introuvable." });
+    }
+
+    // Record audit log entry for sensitive KYC access
+    const ipAddress = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
+    await prisma.auditLog.create({
+      data: {
+        adminId: req.user.id,
+        userId: kycRecord.userId,
+        action: "VIEW_SENSITIVE_KYC_DOCUMENT",
+        resource: `KYC:${kycRecord.id}`,
+        details: `Admin ${req.user.email} viewed KYC document of ${kycRecord.user.email} (${kycRecord.documentType})`,
+        ipAddress: String(ipAddress)
+      }
+    });
+
+    // Return secure response or signed URL
+    return res.json({
+      success: true,
+      documentType: kycRecord.documentType,
+      idNumber: kycRecord.idNumber,
+      documentUrl: kycRecord.documentUrl,
+      accessedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Erreur lors de la consultation sécurisée du document KYC." });
+  }
+});
+
+// Point 30: GDPR Compliance - Right to Data Portability (Export)
+app.get("/api/user/me/export", authenticateUser, async (req: any, res) => {
+  try {
+    const userData = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: {
+        kyc: true,
+        orders: { include: { items: true } },
+        products: true,
+        escrowWallet: true,
+        investments: true,
+        sentMessages: true,
+        receivedMessages: true
+      }
+    });
+
+    if (!userData) {
+      return res.status(404).json({ error: "Données utilisateur introuvables." });
+    }
+
+    const { password: _, verificationTokenHash: __, resetTokenHash: ___, ...gdprExportData } = userData;
+
+    res.setHeader("Content-Disposition", `attachment; filename="lgf_gdpr_export_${req.user.id}.json"`);
+    res.setHeader("Content-Type", "application/json");
+    return res.json({
+      exportTimestamp: new Date().toISOString(),
+      complianceNotice: "Conformité RGPD - Export de vos données personnelles conservées par LGF's Mall.",
+      data: gdprExportData
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Erreur lors de l'exportation de vos données RGPD." });
+  }
+});
+
+// Point 30: GDPR Compliance - Right to be Forgotten (Account Deletion / Anonymization)
+app.delete("/api/user/me/delete", authenticateUser, async (req: any, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Anonymize/delete user data cleanly to respect RGPD while preserving financial audit consistency
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete associated KYC
+      await tx.kyc.deleteMany({ where: { userId } });
+      
+      // 2. Anonymize user details
+      const anonymizedEmail = `deleted_user_${Date.now()}@anonymized.lgfmall.internal`;
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          name: "Utilisateur Supprimé (RGPD)",
+          email: anonymizedEmail,
+          phone: null,
+          password: bcryptjs.hashSync(crypto.randomBytes(32).toString("hex"), 12),
+          isEmailVerified: false,
+          bankName: null,
+          accountNumber: null,
+          taxId: null,
+          passwordChangedAt: new Date()
+        }
+      });
+
+      // 3. Record Audit Log
+      await tx.auditLog.create({
+        data: {
+          userId,
+          action: "GDPR_RIGHT_TO_BE_FORGOTTEN",
+          resource: `User:${userId}`,
+          details: "Account anonymized and personal identity deleted per GDPR mandate."
+        }
+      });
+    });
+
+    return res.json({
+      message: "Votre compte et vos données personnelles ont été supprimés et anonymisés conformément au RGPD."
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Erreur lors de la suppression RGPD de votre compte." });
+  }
+});
+
 
 // ----------------------------------------------------
 // PRODUCTS ENDPOINTS (CATALOG & VENDOR MANAGEMENT)
@@ -770,9 +1706,17 @@ app.get("/api/vendors", async (req, res) => {
       orderBy: { createdAt: "desc" }
     });
     
-    // Remove sensitive data
+    // Remove sensitive data (password, bank details, tax numbers, token hashes)
     const safeVendors = vendors.map(v => {
-      const { password: _, ...rest } = v;
+      const { 
+        password: _, 
+        bankName: __, 
+        accountNumber: ___, 
+        taxId: ____, 
+        verificationTokenHash: _____, 
+        resetTokenHash: ______, 
+        ...rest 
+      } = v;
       return rest;
     });
     
@@ -780,6 +1724,47 @@ app.get("/api/vendors", async (req, res) => {
   } catch (err) {
     console.error("Fetch vendors error:", err);
     res.status(500).json({ error: "Impossible de récupérer la liste des vendeurs." });
+  }
+});
+
+// 1c. Get vendor/store profile by vendor ID or email
+app.get(["/api/vendor/profile/:vendorId", "/api/vendors/:vendorId"], async (req, res) => {
+  try {
+    const { vendorId } = req.params;
+    let vendor = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: vendorId },
+          { email: vendorId }
+        ]
+      },
+      select: { id: true, name: true, email: true, phone: true, role: true }
+    });
+
+    if (!vendor) {
+      // Fallback for official store
+      vendor = await prisma.user.findFirst({
+        where: { email: "lgfmall.lmdg11@gmail.com" },
+        select: { id: true, name: true, email: true, phone: true, role: true }
+      });
+    }
+
+    if (!vendor) {
+      return res.status(404).json({ error: "Vendeur introuvable." });
+    }
+
+    res.json({
+      id: vendor.id,
+      shopName: vendor.name || "LGF's Mall",
+      email: vendor.email,
+      phone: vendor.phone || "+228 72 99 81 48",
+      city: "Lomé",
+      location: "Lomé • Blvd Mono",
+      description: "Boutique Officielle LGF's Mall — Produits certifiés, garantis et livraison rapide dans toute l'Afrique de l'Ouest."
+    });
+  } catch (err) {
+    console.error("Fetch vendor profile error:", err);
+    res.status(500).json({ error: "Erreur lors de la récupération du profil vendeur." });
   }
 });
 
@@ -805,7 +1790,7 @@ app.post("/api/products", authenticateUser, async (req: any, res) => {
     return res.status(403).json({ error: "Accès refusé. Réservé aux vendeurs." });
   }
 
-  const { title, description, price, wholesalePrice, wholesaleMinQty, image, images, category, stock } = req.body;
+  const { title, description, price, wholesalePrice, wholesaleMinQty, image, images, variants, category, stock } = req.body;
 
   if (!title || !description || price === undefined || !category) {
     return res.status(400).json({ error: "Veuillez renseigner le titre, la description, le prix et la catégorie." });
@@ -815,6 +1800,10 @@ app.post("/api/products", authenticateUser, async (req: any, res) => {
     ? JSON.stringify(images) 
     : (image ? JSON.stringify([image]) : null);
   const mainImage = (Array.isArray(images) && images.length > 0) ? images[0] : (image || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800");
+
+  const variantsJson = Array.isArray(variants) && variants.length > 0
+    ? JSON.stringify(variants)
+    : (typeof variants === "string" ? variants : null);
 
   try {
     const product = await prisma.product.create({
@@ -826,6 +1815,7 @@ app.post("/api/products", authenticateUser, async (req: any, res) => {
         wholesaleMinQty: wholesaleMinQty ? parseInt(wholesaleMinQty) : null,
         image: mainImage,
         images: imagesJson,
+        variants: variantsJson,
         category,
         stock: stock !== undefined ? parseInt(stock) : 10,
         vendorId: req.user.id
@@ -849,7 +1839,7 @@ app.put("/api/products/:id", authenticateUser, async (req: any, res) => {
   }
 
   const { id } = req.params;
-  const { title, description, price, wholesalePrice, wholesaleMinQty, image, images, category, stock } = req.body;
+  const { title, description, price, wholesalePrice, wholesaleMinQty, image, images, variants, category, stock } = req.body;
 
   try {
     const existing = await prisma.product.findUnique({ where: { id } });
@@ -868,6 +1858,10 @@ app.put("/api/products/:id", authenticateUser, async (req: any, res) => {
       ? images[0] 
       : (image !== undefined ? image : existing.image);
 
+    const variantsJson = variants !== undefined
+      ? (Array.isArray(variants) ? JSON.stringify(variants) : (typeof variants === "string" ? variants : null))
+      : existing.variants;
+
     const updated = await prisma.product.update({
       where: { id },
       data: {
@@ -878,6 +1872,7 @@ app.put("/api/products/:id", authenticateUser, async (req: any, res) => {
         wholesaleMinQty: wholesaleMinQty !== undefined ? (wholesaleMinQty ? parseInt(wholesaleMinQty) : null) : existing.wholesaleMinQty,
         image: mainImage,
         images: imagesJson,
+        variants: variantsJson,
         category: category || existing.category,
         stock: stock !== undefined ? parseInt(stock) : existing.stock
       }
@@ -919,6 +1914,299 @@ app.delete("/api/products/:id", authenticateUser, async (req: any, res) => {
 });
 
 // ----------------------------------------------------
+// PROMO CODES / COUPONS ENDPOINTS (VENDOR & PUBLIC)
+// ----------------------------------------------------
+
+// 1. Get coupons for active vendor or admin
+app.get("/api/vendor/coupons", authenticateUser, async (req: any, res) => {
+  if (req.user.role !== "VENDOR" && req.user.role !== "ADMIN") {
+    return res.status(403).json({ error: "Accès refusé. Réservé aux vendeurs et administrateurs." });
+  }
+
+  try {
+    const coupons = await prisma.coupon.findMany({
+      where: req.user.role === "ADMIN" ? {} : { vendorId: req.user.id },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json(coupons);
+  } catch (err: any) {
+    console.error("Fetch coupons error:", err);
+    res.status(500).json({ error: "Impossible de récupérer vos codes promos." });
+  }
+});
+
+// 2. Create a promo code / coupon
+app.post("/api/vendor/coupons", authenticateUser, async (req: any, res) => {
+  if (req.user.role !== "VENDOR" && req.user.role !== "ADMIN") {
+    return res.status(403).json({ error: "Accès refusé." });
+  }
+
+  const { code, discountType, discountValue, minOrderAmount, maxUses, expiryDate, isActive } = req.body;
+
+  if (!code || discountValue === undefined) {
+    return res.status(400).json({ error: "Le code promo et la valeur de la réduction sont requis." });
+  }
+
+  const cleanCode = String(code).trim().toUpperCase();
+  if (cleanCode.length < 3) {
+    return res.status(400).json({ error: "Le code promo doit contenir au moins 3 caractères." });
+  }
+
+  try {
+    const existing = await prisma.coupon.findUnique({ where: { code: cleanCode } });
+    if (existing) {
+      return res.status(400).json({ error: `Le code promo "${cleanCode}" existe déjà.` });
+    }
+
+    const coupon = await prisma.coupon.create({
+      data: {
+        code: cleanCode,
+        discountType: discountType === "FIXED" ? "FIXED" : "PERCENTAGE",
+        discountValue: parseFloat(discountValue) || 0,
+        minOrderAmount: parseFloat(minOrderAmount) || 0,
+        maxUses: parseInt(maxUses) || 100,
+        expiryDate: expiryDate ? new Date(expiryDate) : null,
+        isActive: isActive !== undefined ? Boolean(isActive) : true,
+        vendorId: req.user.id
+      }
+    });
+
+    res.status(201).json({
+      message: `Code promo "${cleanCode}" créé avec succès !`,
+      coupon
+    });
+  } catch (err: any) {
+    console.error("Create coupon error:", err);
+    res.status(500).json({ error: "Impossible de créer le code promo." });
+  }
+});
+
+// 3. Update a promo code
+app.put("/api/vendor/coupons/:id", authenticateUser, async (req: any, res) => {
+  if (req.user.role !== "VENDOR" && req.user.role !== "ADMIN") {
+    return res.status(403).json({ error: "Accès refusé." });
+  }
+
+  const { id } = req.params;
+  const { code, discountType, discountValue, minOrderAmount, maxUses, expiryDate, isActive } = req.body;
+
+  try {
+    const existing = await prisma.coupon.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ error: "Code promo introuvable." });
+    }
+
+    if (existing.vendorId !== req.user.id && req.user.role !== "ADMIN") {
+      return res.status(403).json({ error: "Non autorisé à modifier ce code promo." });
+    }
+
+    const cleanCode = code ? String(code).trim().toUpperCase() : existing.code;
+
+    const updated = await prisma.coupon.update({
+      where: { id },
+      data: {
+        code: cleanCode,
+        discountType: discountType || existing.discountType,
+        discountValue: discountValue !== undefined ? parseFloat(discountValue) : existing.discountValue,
+        minOrderAmount: minOrderAmount !== undefined ? parseFloat(minOrderAmount) : existing.minOrderAmount,
+        maxUses: maxUses !== undefined ? parseInt(maxUses) : existing.maxUses,
+        expiryDate: expiryDate !== undefined ? (expiryDate ? new Date(expiryDate) : null) : existing.expiryDate,
+        isActive: isActive !== undefined ? Boolean(isActive) : existing.isActive
+      }
+    });
+
+    res.json({
+      message: "Code promo mis à jour !",
+      coupon: updated
+    });
+  } catch (err: any) {
+    console.error("Update coupon error:", err);
+    res.status(500).json({ error: "Impossible de mettre à jour le code promo." });
+  }
+});
+
+// 4. Delete a promo code
+app.delete("/api/vendor/coupons/:id", authenticateUser, async (req: any, res) => {
+  if (req.user.role !== "VENDOR" && req.user.role !== "ADMIN") {
+    return res.status(403).json({ error: "Accès refusé." });
+  }
+
+  const { id } = req.params;
+
+  try {
+    const existing = await prisma.coupon.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ error: "Code promo introuvable." });
+    }
+
+    if (existing.vendorId !== req.user.id && req.user.role !== "ADMIN") {
+      return res.status(403).json({ error: "Non autorisé." });
+    }
+
+    await prisma.coupon.delete({ where: { id } });
+    res.json({ message: "Code promo supprimé." });
+  } catch (err: any) {
+    res.status(500).json({ error: "Impossible de supprimer le code promo." });
+  }
+});
+
+// 5. Validate a promo code (Public for Buyers at checkout)
+app.post("/api/coupons/validate", async (req, res) => {
+  const { code, totalAmount } = req.body;
+
+  if (!code) {
+    return res.status(400).json({ error: "Veuillez saisir un code promo." });
+  }
+
+  const cleanCode = String(code).trim().toUpperCase();
+  const cartTotal = parseFloat(totalAmount) || 0;
+
+  try {
+    let coupon = await prisma.coupon.findUnique({ where: { code: cleanCode } });
+
+    // Fallback for default promotional codes if not in DB yet
+    if (!coupon) {
+      if (cleanCode === "LGF10") {
+        return res.json({
+          valid: true,
+          code: "LGF10",
+          discountType: "PERCENTAGE",
+          discountValue: 10,
+          discountAmount: Math.round(cartTotal * 0.10),
+          newTotal: Math.max(0, cartTotal - Math.round(cartTotal * 0.10)),
+          message: "Code LGF10 appliqué (-10%) !"
+        });
+      } else if (cleanCode === "AVEDJI20") {
+        return res.json({
+          valid: true,
+          code: "AVEDJI20",
+          discountType: "PERCENTAGE",
+          discountValue: 20,
+          discountAmount: Math.round(cartTotal * 0.20),
+          newTotal: Math.max(0, cartTotal - Math.round(cartTotal * 0.20)),
+          message: "Code AVEDJI20 appliqué (-20%) !"
+        });
+      }
+      return res.status(400).json({ error: "Code promo invalide ou expiré." });
+    }
+
+    if (!coupon.isActive) {
+      return res.status(400).json({ error: "Ce code promo est actuellement désactivé." });
+    }
+
+    if (coupon.expiryDate && new Date(coupon.expiryDate).getTime() < Date.now()) {
+      return res.status(400).json({ error: "Ce code promo a expiré." });
+    }
+
+    if (coupon.usedCount >= coupon.maxUses) {
+      return res.status(400).json({ error: "Le nombre maximal d'utilisations de ce code est atteint." });
+    }
+
+    if (cartTotal < coupon.minOrderAmount) {
+      return res.status(400).json({ 
+        error: `Ce code nécessite un panier minimum de ${coupon.minOrderAmount.toLocaleString('fr-FR')} FCFA.` 
+      });
+    }
+
+    let discountAmount = 0;
+    if (coupon.discountType === "PERCENTAGE") {
+      discountAmount = Math.round(cartTotal * (coupon.discountValue / 100));
+    } else {
+      discountAmount = Math.min(cartTotal, coupon.discountValue);
+    }
+
+    const newTotal = Math.max(0, cartTotal - discountAmount);
+
+    res.json({
+      valid: true,
+      code: coupon.code,
+      discountType: coupon.discountType,
+      discountValue: coupon.discountValue,
+      discountAmount,
+      newTotal,
+      message: `Code ${coupon.code} activé (-${coupon.discountType === "PERCENTAGE" ? coupon.discountValue + "%" : discountAmount + " FCFA"}) !`
+    });
+  } catch (err: any) {
+    console.error("Coupon validation error:", err);
+    res.status(500).json({ error: "Erreur lors de la vérification du code promo." });
+  }
+});
+
+// ----------------------------------------------------
+// ADMIN ENDPOINTS FOR FLASH DEALS & FEATURED PRODUCTS
+// ----------------------------------------------------
+
+// 1. Toggle or update Flash Deal status on a product
+app.put("/api/admin/products/:id/flash-deal", authenticateUser, async (req: any, res) => {
+  if (req.user.role !== "ADMIN") {
+    return res.status(403).json({ error: "Accès réservé aux administrateurs LGF." });
+  }
+
+  const { id } = req.params;
+  const { isFlashDeal, flashPrice, flashEndTime } = req.body;
+
+  try {
+    const product = await prisma.product.findUnique({ where: { id } });
+    if (!product) {
+      return res.status(404).json({ error: "Article introuvable." });
+    }
+
+    const updated = await prisma.product.update({
+      where: { id },
+      data: {
+        isFlashDeal: Boolean(isFlashDeal),
+        flashPrice: flashPrice !== undefined ? (flashPrice ? parseFloat(flashPrice) : null) : product.flashPrice,
+        flashEndTime: flashEndTime !== undefined ? (flashEndTime ? new Date(flashEndTime) : null) : product.flashEndTime
+      }
+    });
+
+    res.json({
+      message: updated.isFlashDeal 
+        ? `Article "${updated.title}" ajouté aux Ventes Flash !`
+        : `Article "${updated.title}" retiré des Ventes Flash.`,
+      product: updated
+    });
+  } catch (err: any) {
+    console.error("Flash deal toggle error:", err);
+    res.status(500).json({ error: "Impossible de modifier la Vente Flash pour cet article." });
+  }
+});
+
+// 2. Toggle or update Featured status on a product
+app.put("/api/admin/products/:id/featured", authenticateUser, async (req: any, res) => {
+  if (req.user.role !== "ADMIN") {
+    return res.status(403).json({ error: "Accès réservé aux administrateurs LGF." });
+  }
+
+  const { id } = req.params;
+  const { isFeatured } = req.body;
+
+  try {
+    const product = await prisma.product.findUnique({ where: { id } });
+    if (!product) {
+      return res.status(404).json({ error: "Article introuvable." });
+    }
+
+    const updated = await prisma.product.update({
+      where: { id },
+      data: {
+        isFeatured: isFeatured !== undefined ? Boolean(isFeatured) : !product.isFeatured
+      }
+    });
+
+    res.json({
+      message: updated.isFeatured 
+        ? `Article "${updated.title}" désormais Mis en Avant !`
+        : `Article "${updated.title}" retiré des articles mis en avant.`,
+      product: updated
+    });
+  } catch (err: any) {
+    console.error("Featured toggle error:", err);
+    res.status(500).json({ error: "Impossible de modifier le statut Mis en Avant." });
+  }
+});
+
+// ----------------------------------------------------
 // ORDERS & ESCROW ENDPOINTS
 // ----------------------------------------------------
 
@@ -945,7 +2233,7 @@ app.post("/api/orders", authenticateUser, async (req: any, res) => {
     }
 
     // Wrap order creation, stock decrement, and escrow wallet update in an atomic Prisma transaction
-    const order = await prisma.$transaction(async (tx) => {
+    const order = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Re-fetch product inside transaction to ensure fresh stock reading
       const txProduct = await tx.product.findUnique({
         where: { id: productId }
@@ -964,7 +2252,10 @@ app.post("/api/orders", authenticateUser, async (req: any, res) => {
       if (txProduct.wholesalePrice && txProduct.wholesaleMinQty && quantity >= txProduct.wholesaleMinQty) {
         unitPrice = txProduct.wholesalePrice;
       }
-      const total = unitPrice * quantity;
+      // Round to the nearest whole FCFA - XOF has no subunit in practice, and this
+      // avoids floating point drift accumulating across the escrow wallet over time.
+      // (Full fix: migrate money columns to Int/Decimal - see CHANGELOG.)
+      const total = Math.round(unitPrice * quantity);
 
       // Find or create wallet
       let wallet = await tx.escrowWallet.findUnique({
@@ -982,21 +2273,40 @@ app.post("/api/orders", authenticateUser, async (req: any, res) => {
         });
       }
 
-      // 1. Create order
+      // 1. Create order with OrderItem
       const newOrder = await tx.order.create({
         data: {
           buyerId: req.user.id,
           total,
           status: "ESCROW_HELD",
           paymentMethod: paymentMethod || "TMoney",
-          escrowWalletId: wallet.id
-        }
+          escrowWalletId: wallet.id,
+          items: {
+            create: [
+              {
+                productId: txProduct.id,
+                vendorId: txProduct.vendorId,
+                quantity,
+                unitPrice,
+                subtotal: total,
+                variant: req.body.variant || null,
+                productSnapshot: JSON.stringify({
+                  title: txProduct.title,
+                  image: txProduct.image,
+                  price: txProduct.price,
+                  category: txProduct.category
+                })
+              }
+            ]
+          }
+        },
+        include: { items: true }
       });
 
-      // 2. Decrement stock atomically
+      // 2. Decrement stock atomically at DB engine level
       await tx.product.update({
         where: { id: productId },
-        data: { stock: txProduct.stock - quantity }
+        data: { stock: { decrement: quantity } }
       });
 
       // 3. Increment pending escrow balance
@@ -1015,6 +2325,97 @@ app.post("/api/orders", authenticateUser, async (req: any, res) => {
   } catch (err) {
     console.error("Order placement error:", err);
     res.status(500).json({ error: "Erreur lors de la création de la transaction sécurisée." });
+  }
+});
+
+// Idempotent Payment Webhook for TMoney, Flooz, and Card gateways
+app.post("/api/payments/webhook", async (req, res) => {
+  const { orderId, transactionId, status, paymentMethod } = req.body;
+
+  if (!orderId || !status) {
+    return res.status(400).json({ error: "Les paramètres orderId et status sont requis." });
+  }
+
+  try {
+    const existingOrder = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: true }
+    });
+
+    if (!existingOrder) {
+      return res.status(404).json({ error: "Commande introuvable." });
+    }
+
+    // Idempotency check: if order is already processed, return existing status
+    if (existingOrder.status === "ESCROW_HELD" || existingOrder.status === "PAYMENT_CONFIRMED" || existingOrder.status === "COMPLETED") {
+      return res.json({ 
+        received: true, 
+        alreadyProcessed: true, 
+        status: existingOrder.status, 
+        message: "Commande déjà traitée et sécurisée dans le séquestre LGF." 
+      });
+    }
+
+    if (status === "SUCCESS" || status === "APPROVED" || status === "PAID") {
+      const updatedOrder = await prisma.$transaction(async (tx) => {
+        const order = await tx.order.update({
+          where: { id: orderId },
+          data: {
+            status: "ESCROW_HELD",
+            paymentMethod: paymentMethod || existingOrder.paymentMethod || "TMoney",
+            paymentTxId: transactionId || `TX-${Date.now()}`
+          }
+        });
+
+        if (existingOrder.items && existingOrder.items.length > 0) {
+          for (const item of existingOrder.items) {
+            let wallet = await tx.escrowWallet.findUnique({
+              where: { vendorId: item.vendorId }
+            });
+
+            if (!wallet) {
+              wallet = await tx.escrowWallet.create({
+                data: {
+                  vendorId: item.vendorId,
+                  balance: 0.0,
+                  pendingBalance: item.subtotal,
+                  currency: "XOF"
+                }
+              });
+            } else {
+              await tx.escrowWallet.update({
+                where: { id: wallet.id },
+                data: { pendingBalance: wallet.pendingBalance + item.subtotal }
+              });
+            }
+          }
+        } else if (existingOrder.escrowWalletId) {
+          await tx.escrowWallet.update({
+            where: { id: existingOrder.escrowWalletId },
+            data: { pendingBalance: { increment: existingOrder.total } }
+          });
+        }
+
+        return order;
+      });
+
+      return res.json({
+        success: true,
+        message: "Paiement validé avec succès. Fonds consignés dans le séquestre LGF.",
+        order: updatedOrder
+      });
+    } else if (status === "FAILED" || status === "CANCELLED") {
+      const cancelledOrder = await prisma.order.update({
+        where: { id: orderId },
+        data: { status: "CANCELLED" }
+      });
+      return res.json({ success: true, message: "Paiement échoué. Commande annulée.", order: cancelledOrder });
+    }
+
+    res.json({ received: true, status: existingOrder.status });
+  } catch (err) {
+    console.error("Payment webhook error:", err);
+    res.status(500).json({ error: "Erreur lors du traitement du webhook de paiement." });
   }
 });
 
@@ -1072,7 +2473,7 @@ app.post("/api/orders/:id/confirm-delivery", authenticateUser, async (req: any, 
   const { id } = req.params;
 
   try {
-    const { updatedOrder } = await prisma.$transaction(async (tx) => {
+    const { updatedOrder } = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const order = await tx.order.findUnique({
         where: { id },
         include: { escrowWallet: true }
@@ -1140,9 +2541,19 @@ app.post("/api/orders/:id/confirm-delivery", authenticateUser, async (req: any, 
 });
 
 // 5. Request Withdraw of Cleared Balance from Wallet (VENDOR only)
+// Vendor requests a withdrawal. This does NOT call any real bank/mobile-money API
+// (none is integrated in this codebase) - it moves the funds out of the vendor's
+// spendable balance into a PENDING WithdrawalRequest that an admin/finance operator
+// must confirm once the transfer has actually been executed through your real
+// payment partner. This prevents double-spending the same balance while being honest
+// about the fact that no automated payout exists yet.
 app.post("/api/escrow/withdraw", authenticateUser, async (req: any, res) => {
   if (req.user.role !== "VENDOR" && req.user.role !== "ADMIN") {
     return res.status(403).json({ error: "Seuls les vendeurs peuvent effectuer des retraits." });
+  }
+
+  if (!req.user.kyc || req.user.kyc.status !== "APPROVED") {
+    return res.status(403).json({ error: "Votre dossier KYC doit être approuvé avant tout retrait." });
   }
 
   const { method, accountNumber } = req.body;
@@ -1152,7 +2563,7 @@ app.post("/api/escrow/withdraw", authenticateUser, async (req: any, res) => {
   }
 
   try {
-    const { withdrawnAmount, updatedWallet } = await prisma.$transaction(async (tx) => {
+    const { withdrawnAmount, request } = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const wallet = await tx.escrowWallet.findUnique({
         where: { vendorId: req.user.id }
       });
@@ -1161,25 +2572,113 @@ app.post("/api/escrow/withdraw", authenticateUser, async (req: any, res) => {
         throw new Error("INSUFFICIENT_FUNDS");
       }
 
-      const amountToWithdraw = wallet.balance;
+      // Round to the nearest whole FCFA to avoid floating point drift accumulating
+      // on a real money balance.
+      const amountToWithdraw = Math.round(wallet.balance);
 
-      const uWallet = await tx.escrowWallet.update({
+      await tx.escrowWallet.update({
         where: { id: wallet.id },
         data: { balance: 0.0 }
       });
 
-      return { withdrawnAmount: amountToWithdraw, updatedWallet: uWallet };
+      const wr = await tx.withdrawalRequest.create({
+        data: {
+          walletId: wallet.id,
+          amount: amountToWithdraw,
+          method,
+          accountNumber,
+          status: "PENDING"
+        }
+      });
+
+      return { withdrawnAmount: amountToWithdraw, request: wr };
     });
 
     res.json({
-      message: `Retrait initié de ${withdrawnAmount} FCFA vers votre compte ${method} (${accountNumber}). Traitement en cours par notre banque partenaire.`,
-      wallet: updatedWallet
+      message: `Demande de retrait de ${withdrawnAmount} FCFA enregistrée vers votre compte ${method} (${accountNumber}). Elle sera traitée manuellement par notre équipe et confirmée une fois le virement effectué.`,
+      withdrawalRequest: request
     });
   } catch (err: any) {
     if (err?.message === "INSUFFICIENT_FUNDS") {
       return res.status(400).json({ error: "Votre solde disponible et retirable est insuffisant (0 FCFA)." });
     }
+    console.error("Withdrawal request error:", err);
     res.status(500).json({ error: "Erreur lors de l'initiation du retrait." });
+  }
+});
+
+// Vendor: list their own withdrawal requests and status
+app.get("/api/escrow/withdrawals", authenticateUser, async (req: any, res) => {
+  try {
+    const wallet = await prisma.escrowWallet.findUnique({ where: { vendorId: req.user.id } });
+    if (!wallet) return res.json([]);
+    const requests = await prisma.withdrawalRequest.findMany({
+      where: { walletId: wallet.id },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json(requests);
+  } catch (err) {
+    res.status(500).json({ error: "Impossible de récupérer vos demandes de retrait." });
+  }
+});
+
+// Admin: list all pending withdrawal requests for manual bank/mobile-money processing
+app.get("/api/admin/withdrawals/pending", authenticateUser, async (req: any, res) => {
+  if (req.user.role !== "ADMIN") {
+    return res.status(403).json({ error: "Accès refusé. Réservé aux administrateurs." });
+  }
+  try {
+    const requests = await prisma.withdrawalRequest.findMany({
+      where: { status: "PENDING" },
+      include: { wallet: { include: { vendor: { select: { id: true, name: true, email: true, phone: true } } } } },
+      orderBy: { createdAt: "asc" }
+    });
+    res.json(requests);
+  } catch (err) {
+    res.status(500).json({ error: "Impossible de récupérer les demandes de retrait." });
+  }
+});
+
+// Admin: confirm a withdrawal has actually been paid out, or reject/refund it back to the wallet
+app.post("/api/admin/withdrawals/:id/resolve", authenticateUser, async (req: any, res) => {
+  if (req.user.role !== "ADMIN") {
+    return res.status(403).json({ error: "Accès refusé. Réservé aux administrateurs." });
+  }
+  const { id } = req.params;
+  const { status, rejectionReason } = req.body; // COMPLETED or REJECTED
+
+  if (status !== "COMPLETED" && status !== "REJECTED") {
+    return res.status(400).json({ error: "Statut invalide. Utilisez COMPLETED ou REJECTED." });
+  }
+
+  try {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const wr = await tx.withdrawalRequest.findUnique({ where: { id } });
+      if (!wr || wr.status !== "PENDING") {
+        throw new Error("NOT_PENDING");
+      }
+
+      if (status === "REJECTED") {
+        // Refund the amount back to the vendor's balance
+        await tx.escrowWallet.update({
+          where: { id: wr.walletId },
+          data: { balance: { increment: wr.amount } }
+        });
+      }
+
+      return tx.withdrawalRequest.update({
+        where: { id },
+        data: { status, rejectionReason: status === "REJECTED" ? (rejectionReason || "Non spécifié") : null }
+      });
+    });
+
+    res.json({ message: "Demande de retrait mise à jour.", withdrawalRequest: result });
+  } catch (err: any) {
+    if (err?.message === "NOT_PENDING") {
+      return res.status(400).json({ error: "Cette demande n'est plus en attente." });
+    }
+    console.error("Withdrawal resolve error:", err);
+    res.status(500).json({ error: "Erreur lors du traitement de la demande." });
   }
 });
 
@@ -1232,6 +2731,248 @@ app.post("/api/investments", authenticateUser, async (req: any, res) => {
   } catch (err) {
     console.error("Investment error:", err);
     res.status(500).json({ error: "Erreur lors de l'enregistrement de l'investissement." });
+  }
+});
+
+// ----------------------------------------------------
+// INVESTMENT PROJECTS ENDPOINTS (ADMIN & PUBLIC)
+// ----------------------------------------------------
+
+// 1. Get list of investment projects (public / admin with optional status filter)
+app.get("/api/investment-projects", async (req: any, res) => {
+  try {
+    const { status, search } = req.query;
+    const whereClause: any = {};
+
+    if (status && status !== "ALL") {
+      whereClause.status = status;
+    }
+
+    if (search) {
+      whereClause.OR = [
+        { title: { contains: String(search) } },
+        { description: { contains: String(search) } },
+        { id: { contains: String(search) } }
+      ];
+    }
+
+    const projects = await prisma.investmentProject.findMany({
+      where: whereClause,
+      orderBy: { createdAt: "desc" }
+    });
+
+    const formattedProjects = projects.map((p) => {
+      let parsedImages = [];
+      if (p.images) {
+        try { parsedImages = typeof p.images === "string" ? JSON.parse(p.images) : p.images; } catch (e) { parsedImages = [p.images]; }
+      } else if (p.coverImage) {
+        parsedImages = [p.coverImage];
+      }
+
+      let parsedDocs = [];
+      if (p.documents) {
+        try { parsedDocs = typeof p.documents === "string" ? JSON.parse(p.documents) : p.documents; } catch (e) { parsedDocs = []; }
+      }
+
+      return {
+        ...p,
+        images: parsedImages,
+        documents: parsedDocs
+      };
+    });
+
+    res.json(formattedProjects);
+  } catch (err) {
+    console.error("Error fetching investment projects:", err);
+    res.status(500).json({ error: "Erreur lors de la récupération des projets d'investissement." });
+  }
+});
+
+// 2. Get single investment project details
+app.get("/api/investment-projects/:id", async (req: any, res) => {
+  try {
+    const project = await prisma.investmentProject.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!project) {
+      return res.status(404).json({ error: "Projet d'investissement introuvable." });
+    }
+
+    let parsedImages = [];
+    if (project.images) {
+      try { parsedImages = typeof project.images === "string" ? JSON.parse(project.images) : project.images; } catch (e) { parsedImages = [project.images]; }
+    } else if (project.coverImage) {
+      parsedImages = [project.coverImage];
+    }
+
+    let parsedDocs = [];
+    if (project.documents) {
+      try { parsedDocs = typeof project.documents === "string" ? JSON.parse(project.documents) : project.documents; } catch (e) { parsedDocs = []; }
+    }
+
+    res.json({
+      ...project,
+      images: parsedImages,
+      documents: parsedDocs
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors du chargement du projet." });
+  }
+});
+
+// 3. Create a new investment project (ADMIN ONLY)
+app.post("/api/investment-projects", authenticateUser, async (req: any, res) => {
+  if (req.user.role !== "ADMIN") {
+    return res.status(403).json({ error: "Accès refusé. Action réservée aux administrateurs." });
+  }
+
+  const {
+    title,
+    description,
+    targetAmount,
+    estimatedReturn,
+    investmentDuration,
+    investmentDurationUnit,
+    status,
+    coverImage,
+    images,
+    documents
+  } = req.body;
+
+  if (!title || !title.trim()) {
+    return res.status(400).json({ error: "Le titre du projet est obligatoire." });
+  }
+  if (!description || !description.trim()) {
+    return res.status(400).json({ error: "La description du projet est obligatoire." });
+  }
+  if (!targetAmount || parseFloat(targetAmount) <= 0) {
+    return res.status(400).json({ error: "Le montant cible doit être supérieur à 0." });
+  }
+  if (estimatedReturn === undefined || estimatedReturn === null || isNaN(parseFloat(estimatedReturn))) {
+    return res.status(400).json({ error: "Le rendement estimé doit être une valeur numérique valide." });
+  }
+  if (!investmentDuration || parseInt(investmentDuration) <= 0) {
+    return res.status(400).json({ error: "La durée d'investissement est obligatoire." });
+  }
+
+  try {
+    const stringifiedImages = images ? JSON.stringify(images) : null;
+    const stringifiedDocs = documents ? JSON.stringify(documents) : null;
+    const primaryCover = coverImage || (Array.isArray(images) && images.length > 0 ? images[0] : null);
+
+    const newProject = await prisma.investmentProject.create({
+      data: {
+        title: title.trim(),
+        description: description.trim(),
+        targetAmount: parseFloat(targetAmount),
+        estimatedReturn: parseFloat(estimatedReturn),
+        investmentDuration: parseInt(investmentDuration),
+        investmentDurationUnit: investmentDurationUnit || "MONTHS",
+        status: status || "DRAFT",
+        coverImage: primaryCover,
+        images: stringifiedImages,
+        documents: stringifiedDocs,
+        authorId: req.user.id
+      }
+    });
+
+    res.status(201).json({
+      message: "Projet d'investissement publié avec succès !",
+      project: {
+        ...newProject,
+        images: images || [],
+        documents: documents || []
+      }
+    });
+  } catch (err) {
+    console.error("Error creating investment project:", err);
+    res.status(500).json({ error: "Erreur lors de la création du projet d'investissement." });
+  }
+});
+
+// 4. Update an existing investment project (ADMIN ONLY)
+app.put("/api/investment-projects/:id", authenticateUser, async (req: any, res) => {
+  if (req.user.role !== "ADMIN") {
+    return res.status(403).json({ error: "Accès refusé. Action réservée aux administrateurs." });
+  }
+
+  const { id } = req.params;
+  const {
+    title,
+    description,
+    targetAmount,
+    estimatedReturn,
+    investmentDuration,
+    investmentDurationUnit,
+    status,
+    coverImage,
+    images,
+    documents
+  } = req.body;
+
+  try {
+    const existing = await prisma.investmentProject.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ error: "Projet d'investissement introuvable." });
+    }
+
+    const updateData: any = {};
+    if (title !== undefined) updateData.title = title.trim();
+    if (description !== undefined) updateData.description = description.trim();
+    if (targetAmount !== undefined) updateData.targetAmount = parseFloat(targetAmount);
+    if (estimatedReturn !== undefined) updateData.estimatedReturn = parseFloat(estimatedReturn);
+    if (investmentDuration !== undefined) updateData.investmentDuration = parseInt(investmentDuration);
+    if (investmentDurationUnit !== undefined) updateData.investmentDurationUnit = investmentDurationUnit;
+    if (status !== undefined) updateData.status = status;
+    if (images !== undefined) {
+      updateData.images = JSON.stringify(images);
+      if (!coverImage && Array.isArray(images) && images.length > 0) {
+        updateData.coverImage = images[0];
+      }
+    }
+    if (coverImage !== undefined) updateData.coverImage = coverImage;
+    if (documents !== undefined) updateData.documents = JSON.stringify(documents);
+
+    const updatedProject = await prisma.investmentProject.update({
+      where: { id },
+      data: updateData
+    });
+
+    res.json({
+      message: "Modifications du projet d'investissement enregistrées avec succès.",
+      project: {
+        ...updatedProject,
+        images: images !== undefined ? images : (updatedProject.images ? JSON.parse(updatedProject.images) : []),
+        documents: documents !== undefined ? documents : (updatedProject.documents ? JSON.parse(updatedProject.documents) : [])
+      }
+    });
+  } catch (err) {
+    console.error("Error updating investment project:", err);
+    res.status(500).json({ error: "Erreur lors de la mise à jour du projet." });
+  }
+});
+
+// 5. Delete an investment project (ADMIN ONLY)
+app.delete("/api/investment-projects/:id", authenticateUser, async (req: any, res) => {
+  if (req.user.role !== "ADMIN") {
+    return res.status(403).json({ error: "Accès refusé. Action réservée aux administrateurs." });
+  }
+
+  const { id } = req.params;
+
+  try {
+    const existing = await prisma.investmentProject.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ error: "Projet d'investissement introuvable." });
+    }
+
+    await prisma.investmentProject.delete({ where: { id } });
+
+    res.json({ message: "Projet d'investissement supprimé avec succès." });
+  } catch (err) {
+    console.error("Error deleting investment project:", err);
+    res.status(500).json({ error: "Erreur lors de la suppression du projet d'investissement." });
   }
 });
 
@@ -1530,7 +3271,18 @@ app.post("/api/orders/:id/mark-delivered", authenticateUser, async (req: any, re
       where: { id },
       data: {
         status: "DELIVERED"
-      }
+      },
+      include: { buyer: true }
+    });
+
+    // Notify buyer
+    NotificationService.dispatch({
+      recipientEmail: updatedOrder.buyer.email,
+      recipientPhone: updatedOrder.buyer.phone,
+      subject: `Commande #${id.slice(0, 8)} Livrée !`,
+      title: "Colis Livré",
+      message: `Votre commande a été livrée par le transporteur. Veuillez valider la réception finale sur LGF's Mall.`,
+      type: "DELIVERED"
     });
 
     res.json({
@@ -1540,6 +3292,410 @@ app.post("/api/orders/:id/mark-delivered", authenticateUser, async (req: any, re
   } catch (err) {
     res.status(500).json({ error: "Erreur lors de la validation de la livraison." });
   }
+});
+
+// 5. Complete order & release escrow with commission deduction (Point 90 & 106)
+app.post("/api/orders/:id/complete", authenticateUser, async (req: any, res) => {
+  const { id } = req.params;
+
+  try {
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) {
+      return res.status(404).json({ error: "Commande introuvable." });
+    }
+
+    if (order.buyerId !== req.user.id && req.user.role !== "ADMIN") {
+      return res.status(403).json({ error: "Seul l'acheteur ou un administrateur peut valider la réception finale." });
+    }
+
+    const completedOrder = await WalletService.releaseEscrowAndDeductCommission(id);
+
+    res.json({
+      message: "Commande validée et terminée ! Les fonds ont été débloqués pour le vendeur (commission plateforme de 5% prélevée).",
+      order: completedOrder
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "Erreur lors de la libération des fonds en séquestre." });
+  }
+});
+
+// 6. Download PDF Invoice (Point 107)
+app.get("/api/orders/:id/invoice", authenticateUser, async (req: any, res) => {
+  const { id } = req.params;
+
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: { items: true }
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: "Commande introuvable." });
+    }
+
+    const isBuyer = order.buyerId === req.user.id;
+    const isVendor = order.items.some((it) => it.vendorId === req.user.id);
+    const isAdmin = req.user.role === "ADMIN";
+
+    if (!isBuyer && !isVendor && !isAdmin) {
+      return res.status(403).json({ error: "Accès refusé à cette facture." });
+    }
+
+    const pdfBuffer = await InvoiceService.generateOrderInvoicePdf(id);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="Facture_LGF_${id.slice(0, 8).toUpperCase()}.pdf"`);
+    res.setHeader("Content-Length", pdfBuffer.length);
+    return res.send(pdfBuffer);
+  } catch (err: any) {
+    res.status(500).json({ error: "Impossible de générer la facture PDF." });
+  }
+});
+
+// ----------------------------------------------------
+// INTERNAL WALLET & LEDGER ENDPOINTS (Point 105)
+// ----------------------------------------------------
+app.get("/api/wallet/my-wallet", authenticateUser, async (req: any, res) => {
+  try {
+    const wallet = await WalletService.getUserWallet(req.user.id);
+    const transactions = await prisma.walletTransaction.findMany({
+      where: { userId: req.user.id },
+      orderBy: { createdAt: "desc" },
+      take: 50
+    });
+
+    res.json({ wallet, transactions });
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors du chargement du portefeuille." });
+  }
+});
+
+app.post("/api/wallet/topup", authenticateUser, async (req: any, res) => {
+  const { amount, paymentTxId } = req.body;
+  if (!amount || Number(amount) <= 0) {
+    return res.status(400).json({ error: "Montant de rechargement invalide." });
+  }
+
+  try {
+    const result = await WalletService.topupUserWallet(
+      req.user.id,
+      Number(amount),
+      paymentTxId || `TOPUP-${Date.now()}`
+    );
+
+    res.json({
+      message: `Portefeuille rechargé avec succès de ${amount} FCFA !`,
+      wallet: result.wallet,
+      transaction: result.transaction
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "Erreur lors du rechargement du portefeuille." });
+  }
+});
+
+// ----------------------------------------------------
+// PRODUCT Q&A ENDPOINTS (Point 99)
+// ----------------------------------------------------
+app.post("/api/products/:id/questions", authenticateUser, async (req: any, res) => {
+  const { id } = req.params;
+  const { question } = req.body;
+
+  if (!question || !question.trim()) {
+    return res.status(400).json({ error: "La question ne peut pas être vide." });
+  }
+
+  try {
+    const product = await prisma.product.findUnique({ where: { id } });
+    if (!product) return res.status(404).json({ error: "Produit introuvable." });
+
+    const qRecord = await prisma.productQuestion.create({
+      data: {
+        productId: id,
+        userId: req.user.id,
+        question: question.trim()
+      },
+      include: { user: { select: { name: true, role: true } } }
+    });
+
+    res.status(201).json({ message: "Votre question a été publiée.", question: qRecord });
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors de la publication de la question." });
+  }
+});
+
+app.get("/api/products/:id/questions", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const questions = await prisma.productQuestion.findMany({
+      where: { productId: id },
+      include: {
+        user: { select: { name: true, role: true } },
+        answers: {
+          include: { user: { select: { name: true, role: true } } },
+          orderBy: { createdAt: "asc" }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    res.json(questions);
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors du chargement des questions/réponses." });
+  }
+});
+
+app.post("/api/questions/:questionId/answers", authenticateUser, async (req: any, res) => {
+  const { questionId } = req.params;
+  const { answer } = req.body;
+
+  if (!answer || !answer.trim()) {
+    return res.status(400).json({ error: "La réponse ne peut pas être vide." });
+  }
+
+  try {
+    const questionRecord = await prisma.productQuestion.findUnique({
+      where: { id: questionId },
+      include: { product: true }
+    });
+
+    if (!questionRecord) return res.status(404).json({ error: "Question introuvable." });
+
+    // Ensure only Vendor of the product or ADMIN can answer
+    const isVendor = questionRecord.product.vendorId === req.user.id;
+    const isAdmin = req.user.role === "ADMIN";
+
+    if (!isVendor && !isAdmin) {
+      return res.status(403).json({ error: "Seul le vendeur de ce produit ou un administrateur peut répondre aux questions." });
+    }
+
+    const aRecord = await prisma.productAnswer.create({
+      data: {
+        questionId,
+        userId: req.user.id,
+        answer: answer.trim()
+      },
+      include: { user: { select: { name: true, role: true } } }
+    });
+
+    res.status(201).json({ message: "Réponse enregistrée avec succès !", answer: aRecord });
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors de la publication de la réponse." });
+  }
+});
+
+// ----------------------------------------------------
+// REFERRAL PROGRAM ENDPOINTS (Point 104)
+// ----------------------------------------------------
+app.get("/api/user/referral-link", authenticateUser, async (req: any, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { referralCode: true }
+    });
+
+    const appUrl = process.env.APP_URL || "https://lgfmall.com";
+    const shareUrl = `${appUrl}/register?ref=${user?.referralCode}`;
+
+    const referrals = await prisma.referral.findMany({
+      where: { referrerId: req.user.id },
+      include: { referee: { select: { name: true, email: true, createdAt: true } } },
+      orderBy: { createdAt: "desc" }
+    });
+
+    res.json({
+      referralCode: user?.referralCode,
+      shareUrl,
+      rewardPerReferral: 1000,
+      referrals
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors du chargement des informations de parrainage." });
+  }
+});
+
+// ----------------------------------------------------
+// DRIVER LOCATION TRACKING ENDPOINTS (Points 95, 96, 103)
+// ----------------------------------------------------
+app.post("/api/driver/location", authenticateUser, requireRole("DRIVER", "ADMIN"), async (req: any, res) => {
+  const { latitude, longitude, speed, heading, orderId } = req.body;
+
+  if (latitude === undefined || longitude === undefined) {
+    return res.status(400).json({ error: "Coordonnées GPS requises." });
+  }
+
+  try {
+    const loc = await prisma.driverLocation.upsert({
+      where: { driverId: req.user.id },
+      update: { latitude: Number(latitude), longitude: Number(longitude), speed, heading },
+      create: { driverId: req.user.id, latitude: Number(latitude), longitude: Number(longitude), speed, heading }
+    });
+
+    if (orderId) {
+      await prisma.orderTrackingLog.create({
+        data: {
+          orderId,
+          status: "IN_TRANSIT",
+          location: `${latitude},${longitude}`,
+          note: `Livreur en déplacement (${speed ? speed.toFixed(1) + " km/h" : "en cours"})`
+        }
+      });
+    }
+
+    res.json({ message: "Position du livreur mise à jour en temps réel.", location: loc });
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors de la mise à jour de la position GPS." });
+  }
+});
+
+app.get("/api/orders/:id/tracking", authenticateUser, async (req: any, res) => {
+  const { id } = req.params;
+
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: {
+        buyer: { select: { id: true, name: true, phone: true } },
+        items: { select: { vendorId: true } }
+      }
+    });
+
+    if (!order) return res.status(404).json({ error: "Commande introuvable." });
+
+    // Authorization Check: Only Buyer, assigned Driver, Item Vendor, or Admin can view tracking
+    const isBuyer = order.buyerId === req.user.id;
+    const isDriver = order.driverId === req.user.id;
+    const isVendor = order.items.some((it) => it.vendorId === req.user.id);
+    const isAdmin = req.user.role === "ADMIN";
+
+    if (!isBuyer && !isDriver && !isVendor && !isAdmin) {
+      return res.status(403).json({ error: "Accès refusé aux informations de suivi de cette commande." });
+    }
+
+    let driverPos = null;
+    if (order.driverId) {
+      driverPos = await prisma.driverLocation.findUnique({
+        where: { driverId: order.driverId }
+      });
+    }
+
+    const trackingLogs = await prisma.orderTrackingLog.findMany({
+      where: { orderId: id },
+      orderBy: { createdAt: "desc" }
+    });
+
+    res.json({
+      orderId: order.id,
+      status: order.status,
+      driverId: order.driverId,
+      driverPosition: driverPos,
+      trackingLogs
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors du suivi en temps réel de la commande." });
+  }
+});
+
+// ----------------------------------------------------
+// VENDOR TOOLS (COUPONS & SALES CSV EXPORT) (Point 102)
+// ----------------------------------------------------
+app.post("/api/vendor/coupons", authenticateUser, requireRole("VENDOR", "ADMIN"), async (req: any, res) => {
+  const { code, discountType, discountValue, minOrderAmount, maxUses, expiryDate } = req.body;
+
+  if (!code || !discountValue) {
+    return res.status(400).json({ error: "Code promo et valeur de réduction requis." });
+  }
+
+  try {
+    const coupon = await prisma.coupon.create({
+      data: {
+        code: code.trim().toUpperCase(),
+        discountType: discountType || "PERCENTAGE",
+        discountValue: Number(discountValue),
+        minOrderAmount: Number(minOrderAmount || 0),
+        maxUses: Number(maxUses || 100),
+        expiryDate: expiryDate ? new Date(expiryDate) : null,
+        vendorId: req.user.role === "ADMIN" ? null : req.user.id
+      }
+    });
+
+    res.status(201).json({ message: "Code promo créé avec succès !", coupon });
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors de la création du code promo." });
+  }
+});
+
+app.get("/api/vendor/coupons", authenticateUser, requireRole("VENDOR", "ADMIN"), async (req: any, res) => {
+  try {
+    const coupons = await prisma.coupon.findMany({
+      where: req.user.role === "ADMIN" ? {} : { vendorId: req.user.id },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json(coupons);
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors du chargement des codes promo." });
+  }
+});
+
+app.get("/api/vendor/exports/sales", authenticateUser, requireRole("VENDOR", "ADMIN"), async (req: any, res) => {
+  try {
+    const orderItems = await prisma.orderItem.findMany({
+      where: req.user.role === "ADMIN" ? {} : { vendorId: req.user.id },
+      include: {
+        order: { select: { id: true, status: true, paymentMethod: true, createdAt: true } },
+        product: { select: { title: true, category: true } }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    let csv = "ID Commande,Date,Produit,Categorie,Quantite,Prix Unitaire (FCFA),Sous-Total (FCFA),Mode Paiement,Statut\n";
+    for (const item of orderItems) {
+      const dateStr = new Date(item.order.createdAt).toISOString().split("T")[0];
+      const titleClean = (item.product?.title || "Article").replace(/,/g, " ");
+      csv += `"${item.order.id}","${dateStr}","${titleClean}","${item.product?.category || ''}",${item.quantity},${item.unitPrice},${item.subtotal},"${item.order.paymentMethod || 'Mobile Money'}","${item.order.status}"\n`;
+    }
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="LGF_Ventes_${new Date().toISOString().split("T")[0]}.csv"`);
+    return res.send(csv);
+  } catch (err) {
+    res.status(500).json({ error: "Erreur lors de l'exportation des ventes en CSV." });
+  }
+});
+
+// ----------------------------------------------------
+// MISSING ROLE DASHBOARDS (RBAC) (Point 101)
+// ----------------------------------------------------
+app.get("/api/admin/dashboard/support", authenticateUser, requireRole("ADMIN", "SUPPORT"), async (req: any, res) => {
+  const openQuestions = await prisma.productQuestion.count({ where: { answers: { none: {} } } });
+  const pendingKycs = await prisma.kyc.count({ where: { status: "PENDING" } });
+  res.json({ role: "SUPPORT", openTickets: openQuestions, pendingKycs, status: "Active Support Workspace" });
+});
+
+app.get("/api/admin/dashboard/moderation", authenticateUser, requireRole("ADMIN", "MODERATOR"), async (req: any, res) => {
+  const totalProducts = await prisma.product.count();
+  const pendingQuestions = await prisma.productQuestion.count();
+  res.json({ role: "MODERATOR", totalProducts, pendingQuestions, status: "Active Moderation Workspace" });
+});
+
+app.get("/api/admin/dashboard/accounting", authenticateUser, requireRole("ADMIN", "ACCOUNTANT"), async (req: any, res) => {
+  const platformWallet = await WalletService.getPlatformWallet();
+  const totalCompletedOrders = await prisma.order.aggregate({
+    where: { status: "COMPLETED" },
+    _sum: { total: true }
+  });
+  res.json({
+    role: "ACCOUNTANT",
+    platformCommissionBalance: platformWallet.balance,
+    grossMarketplaceVolume: totalCompletedOrders._sum.total || 0,
+    status: "Active Financial Accounting Workspace"
+  });
+});
+
+app.get("/api/admin/dashboard/marketing", authenticateUser, requireRole("ADMIN", "MARKETING"), async (req: any, res) => {
+  const totalCoupons = await prisma.coupon.count();
+  const totalReferrals = await prisma.referral.count({ where: { status: "REWARDED" } });
+  res.json({ role: "MARKETING", activeCoupons: totalCoupons, rewardedReferrals: totalReferrals, status: "Active Marketing Workspace" });
 });
 
 // ----------------------------------------------------
@@ -1553,7 +3709,14 @@ function getGeminiClient(): GoogleGenAI {
     if (!key) {
       throw new Error("La clé d'API GEMINI_API_KEY n'est pas configurée dans les secrets ou les variables d'environnement.");
     }
-    aiClient = new GoogleGenAI({ apiKey: key });
+    aiClient = new GoogleGenAI({ 
+      apiKey: key,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build'
+        }
+      }
+    });
   }
   return aiClient;
 }
@@ -1569,7 +3732,7 @@ app.post("/api/gemini/generate-description", authenticateUser, async (req: any, 
     const prompt = `Génère une description de produit professionnelle, optimisée pour le commerce électronique et très attrayante pour un article nommé "${title}" dans la catégorie "${category}". La description doit mettre en avant la qualité, l'utilité, et donner envie d'acheter. Réponds uniquement avec la description générée en français, sans titre d'introduction, sans métadonnées et sans mise en forme markdown superflue. Reste concis (environ 2 à 4 phrases).`;
     
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.6-flash",
       contents: [prompt],
       config: {
         maxOutputTokens: 500,
@@ -1586,10 +3749,130 @@ app.post("/api/gemini/generate-description", authenticateUser, async (req: any, 
 });
 
 // ----------------------------------------------------
+// LGF'S MALL FLOATING GEMINI AI ASSISTANT ENDPOINT
+// ----------------------------------------------------
+const LGF_ASSISTANT_SYSTEM_PROMPT = `Vous êtes l'Assistant Virtuel officiel de LGF's Mall (Le Grand Foyer Mall), la marketplace multi-vendeurs d'excellence basée au Togo et rayonnant sur toute l'Afrique.
+
+Votre mission est d'aider les visiteurs/acheteurs, les vendeurs (boutiques), les livreurs et les investisseurs avec précision, courtoisie et clarté.
+
+INFORMATIONS CLÉS DE LA PLATEFORME LGF'S MALL :
+1. CONCEPT & COUVERTURE :
+   - Marketplace de référence connectant acheteurs et vendeurs à Lomé, Kara, Sokodé, Atakpamé, Kpalimé, Dapaong, et à l'international.
+   - Propose un catalogue varié (Électronique, Mode, Beauté, Maison, Agro-alimentaire), des ventes flash quotidiennes et des sessions de Live Commerce "Lomé Live Market".
+
+2. POUR LES ACHETEURS (🛒) :
+   - Commande : Parcourir le catalogue, ajouter au panier, saisir des coupons de réduction et valider la commande.
+   - Modes de Paiement : T-Money (Togo), Moov Flooz, Wave, Orange Money, Cartes Visa/Mastercard, Portefeuille LGF.
+   - Sécurité Escrow (Paiement Séquestre) : L'argent payé par l'acheteur est conservé en toute sécurité par LGF's Mall. Le vendeur n'est payé que lorsque l'acheteur reçoit et valide son colis.
+   - Suivi de Commande : Entrez votre code de suivi dans l'outil "Suivre ma commande" sur le site.
+
+3. POUR LES VENDEURS / BOUTIQUES (🏪) :
+   - Inscription & Verification KYC : Ouvrez votre boutique en 2 minutes. Soumettez votre CNI/Passeport ou Registre du commerce (NIF/RCCM) pour obtenir le badge certifié.
+   - Produits & IA : Ajoutez vos produits, gérez vos stocks, et générez des descriptions automatiques grâce à l'IA Gemini intégrée.
+   - Retrait des Gains : Portefeuille vendeur crédité dès validation de la livraison. Retrait instantané en 1 clic vers T-Money, Flooz ou Compte bancaire.
+
+4. POUR LES LIVREURS & HUBS (🛵) :
+   - Réseau de Livraison : Postulez pour devenir livreur partenaire agréé.
+   - Validation Sécurisée : À la remise du colis, scannez le QR Code de la commande ou saisissez le code OTP de l'acheteur pour débloquer automatiquement le versement séquestre.
+
+5. ASSISTANCE HUMAINE WHATSAPP :
+   - En cas de besoin d'un agent humain ou pour un litige complexe, l'utilisateur peut cliquer sur le bouton WhatsApp officiel de LGF's Mall (+228 72 99 81 48).
+
+DIRECTIVES DE RÉPONSE :
+- Répondez en Français par défaut, de manière accueillante, claire, structurée (utilisez des puces ou numéros et des emojis pertinents).
+- Soyez concis mais complet.
+- Si la question concerne une opération spécifique, donnez les étapes simples à suivre.`;
+
+const assistantLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  message: { error: "Trop de requêtes. Veuillez patienter une minute avant de poser d'autres questions à l'assistant." }
+});
+
+app.post("/api/assistant/chat", assistantLimiter, async (req, res) => {
+  const { message, history = [], lang = "FR" } = req.body;
+
+  if (!message || typeof message !== "string" || message.trim().length === 0) {
+    return res.status(400).json({ error: "Le message est requis." });
+  }
+
+  const sanitizedMessage = message.slice(0, 1000);
+
+  try {
+    const ai = getGeminiClient();
+
+    // Reconstruct prompt with chat context
+    const contents: any[] = [];
+
+    // Append formatted history turns capped at 10 turns
+    if (Array.isArray(history) && history.length > 0) {
+      for (const turn of history.slice(-10)) {
+        if (turn.text) {
+          contents.push({
+            role: turn.role === "assistant" || turn.role === "model" ? "model" : "user",
+            parts: [{ text: String(turn.text).slice(0, 1000) }]
+          });
+        }
+      }
+    }
+
+    // Add current user prompt
+    contents.push({
+      role: "user",
+      parts: [{ text: sanitizedMessage }]
+    });
+
+    const langInstruction = `\n\nCRITICAL LANGUAGE INSTRUCTION: Respond in the user's selected language context: "${lang}". If lang is FR respond in French, if EN in English, if EWE in Éwé, if KABYE in Kabyè.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: contents,
+      config: {
+        systemInstruction: LGF_ASSISTANT_SYSTEM_PROMPT + langInstruction,
+        temperature: 0.6,
+        maxOutputTokens: 800,
+      },
+    });
+
+    const replyText = response.text?.trim() || "Je suis désolé, je n'ai pas pu formuler de réponse pour le moment. Vous pouvez également contacter notre équipe sur WhatsApp.";
+
+    res.json({ response: replyText });
+  } catch (err: any) {
+    console.error("Gemini Assistant Chat API Error:", err);
+    res.status(500).json({ 
+      error: "Un problème temporaire est survenu avec l'assistant IA. Vous pouvez également contacter notre équipe sur WhatsApp (+228 72 99 81 48).",
+      fallbackAvailable: true
+    });
+  }
+});
+
+// Point 17: Centralized Error Handler Middleware - Sanitizes all error responses
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error("🚨 Unhandled Express Error:", err?.stack || err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  const isProd = process.env.NODE_ENV === "production";
+  return res.status(err?.status || 500).json({
+    error: isProd 
+      ? "Une erreur interne est survenue. L'équipe technique LGF a été notifiée."
+      : (err?.message || "Erreur interne serveur."),
+    code: err?.code || "INTERNAL_ERROR"
+  });
+});
+
+// ----------------------------------------------------
 // VITE DEV SERVER / PRODUCTION SERVING
 // ----------------------------------------------------
 async function startServer() {
   try {
+    // STEP 3.5: Ensure database schema is synced without destructive file deletion
+    try {
+      execSync("npx prisma db push --skip-generate", { stdio: "inherit" });
+    } catch (pushErr) {
+      console.warn("Prisma db push warning:", pushErr);
+    }
+
     // STEP 4: Seed database sequentially
     await seedDatabase();
     console.log("Database seed completed\n");

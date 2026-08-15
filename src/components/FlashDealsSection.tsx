@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { Zap, Clock, ShoppingCart, Eye, Star, Flame } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Zap, Clock, ShoppingCart, Eye, Star, Flame, Store } from "lucide-react";
 import { Product } from "../types";
+import { getOptimizedImageUrl } from "../utils/imageOptimizer";
 
 interface FlashDealsSectionProps {
   products: Product[];
@@ -17,6 +18,26 @@ export default function FlashDealsSection({
 }: FlashDealsSectionProps) {
   // Live countdown timer state (e.g. 14h : 28m : 45s)
   const [timeLeft, setTimeLeft] = useState({ hours: 14, minutes: 28, seconds: 45 });
+
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartPos.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+  };
+
+  const createTouchEndHandler = (product: Product) => (e: React.TouchEvent) => {
+    if (!touchStartPos.current) return;
+    const touchEnd = e.changedTouches[0];
+    const dx = Math.abs(touchEnd.clientX - touchStartPos.current.x);
+    const dy = Math.abs(touchEnd.clientY - touchStartPos.current.y);
+    if (dx < 10 && dy < 10) {
+      onOpenDetail(product);
+    }
+    touchStartPos.current = null;
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -98,10 +119,17 @@ export default function FlashDealsSection({
               </div>
 
               {/* Product Image */}
-              <div className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 dark:bg-emerald-900/40 mb-3 cursor-pointer" onClick={() => onOpenDetail(p)}>
+              <div 
+                className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 dark:bg-emerald-900/40 mb-3 cursor-pointer" 
+                onClick={() => onOpenDetail(p)}
+                onTouchStart={handleTouchStart}
+                onTouchEnd={createTouchEndHandler(p)}
+              >
                 <img
-                  src={p.image || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80"}
+                  src={getOptimizedImageUrl(p.image, 400, 70)}
                   alt={p.title}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
                 <button
@@ -113,17 +141,26 @@ export default function FlashDealsSection({
                 </button>
               </div>
 
-              {/* Title & Category */}
+              {/* Title, Category & Store Name */}
               <div className="space-y-1 mb-3">
                 <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 font-mono uppercase">
                   {p.category}
                 </span>
                 <h4 
                   onClick={() => onOpenDetail(p)}
+                  onTouchStart={handleTouchStart}
+                  onTouchEnd={createTouchEndHandler(p)}
                   className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white line-clamp-2 hover:text-emerald-600 cursor-pointer font-display leading-snug"
                 >
                   {p.title}
                 </h4>
+                {/* Store Name Badge below title */}
+                <div className="mt-1">
+                  <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-emerald-100/80 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 text-[10px] font-bold border border-emerald-200/60 dark:border-emerald-700/60">
+                    <Store className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="truncate max-w-[140px]">{p.vendor?.name || "LGF's Mall"}</span>
+                  </span>
+                </div>
               </div>
 
               {/* Price & Stock bar */}

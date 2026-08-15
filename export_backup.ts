@@ -59,10 +59,10 @@ async function exportData() {
   console.log("Summary of dumped records:\n", JSON.stringify(backupData.counts, null, 2));
 
   console.log("\n--- USER ACCOUNTS ---");
-  users.forEach(u => console.log(`- [${u.role}] ID: ${u.id} | ${u.name} | ${u.email}`));
+  users.forEach((u: (typeof users)[number]) => console.log(`- [${u.role}] ID: ${u.id} | ${u.name} | ${u.email}`));
 
   console.log("\n--- PRODUCTS ---");
-  products.forEach(p => console.log(`- ID: ${p.id} | ${p.title} | Price: ${p.price} XOF | Stock: ${p.stock}`));
+  products.forEach((p: (typeof products)[number]) => console.log(`- ID: ${p.id} | ${p.title} | Price: ${p.price} XOF | Stock: ${p.stock}`));
 }
 
 exportData()

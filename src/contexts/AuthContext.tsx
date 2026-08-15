@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { User as SupabaseUser, Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
+import { executeGoogleSignIn } from "../lib/firebase";
 
 export interface UserMetaData {
   name?: string;
@@ -127,26 +128,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInWithGoogle = async () => {
     setError(null);
     try {
-      const redirectTo = `${window.location.origin}/`;
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo,
-          queryParams: {
-            access_type: "offline",
-            prompt: "consent",
-          },
-        },
-      });
-
-      if (error) {
-        setError(error.message);
-        return { success: false, error: error.message };
+      console.log("🔥 [AuthContext Firebase Google Auth] Initiating signInWithPopup...");
+      const googleUser = await executeGoogleSignIn();
+      if (!googleUser) {
+        return { success: false, error: "Connexion Google annulée." };
       }
-
-      return { success: true };
+      return { success: true, user: googleUser };
     } catch (err: any) {
-      const msg = err?.message || "Erreur d'authentification Google.";
+      console.error("🔥 [AuthContext Firebase Google Auth Exception]:", err);
+      const msg = err?.message || "Erreur d'authentification Google via Firebase.";
       setError(msg);
       return { success: false, error: msg };
     }
