@@ -1,0 +1,162 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+/* Base resets & theme mode defaults */
+:root {
+  color-scheme: light;
+}
+
+:root.dark {
+  color-scheme: dark;
+}
+
+.dark body {
+  background-color: #022c22;
+  color: #f0fdf4;
+}
+
+/* 
+  STRICT ISOLATION OF CONTRAST / READABILITY OVERRIDES:
+  Scope dark mode readability rules to 'main' and 'footer', explicitly excluding '#lgf-header' / '.lgf-header'.
+  Header retains its original intact styling without interference.
+*/
+
+.dark body:not(#lgf-header) main h1,
+.dark body:not(#lgf-header) main h2,
+.dark body:not(#lgf-header) main h3,
+.dark body:not(#lgf-header) main h4,
+.dark body:not(#lgf-header) footer h1,
+.dark body:not(#lgf-header) footer h2,
+.dark body:not(#lgf-header) footer h3,
+.dark body:not(#lgf-header) footer h4,
+.dark body:not(#lgf-header) footer h5,
+.dark body:not(#lgf-header) footer h6 {
+  color: #ffffff;
+}
+
+/* 
+  CUSTOM CLASS: .high-contrast-fix
+  Harmonizes dark mode text contrast in specific non-header sections:
+  - Flash Deals Section (#flash-deals-section)
+  - Home Page Sections (#categories-section, #bestsellers-section, #new-arrivals-section, #shops-section, #trust-badges-section)
+  - Product Cards
+  - Footer
+*/
+.dark .high-contrast-fix h1,
+.dark .high-contrast-fix h2,
+.dark .high-contrast-fix h3,
+.dark .high-contrast-fix h4,
+.dark .high-contrast-fix h5,
+.dark .high-contrast-fix h6 {
+  color: #ffffff !important;
+}
+
+.dark .high-contrast-fix .text-slate-600,
+.dark .high-contrast-fix .text-slate-500 {
+  color: #a7f3d0 !important; /* emerald-200 for crystal-clear readability */
+}
+
+.dark .high-contrast-fix .text-slate-400 {
+  color: #6ee7b7 !important; /* emerald-300 */
+}
+
+.dark .high-contrast-fix .text-slate-700,
+.dark .high-contrast-fix .text-slate-800 {
+  color: #ecfdf5 !important; /* emerald-50 */
+}
+
+.dark .high-contrast-fix .text-emerald-950,
+.dark .high-contrast-fix .text-emerald-900 {
+  color: #f0fdf4 !important; /* emerald-50 */
+}
+
+/* Custom text selection styling */
+::selection {
+  background-color: #059669;
+  color: #ffffff;
+}
+
+.dark ::selection {
+  background-color: #34d399;
+  color: #022c22;
+}
+
+/* Custom visual pulse animation for Escrow badges */
+@keyframes goldPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+.pulse-gold {
+  animation: goldPulse 2s infinite ease-in-out;
+}
+
+/* Continuous Marquee Ticker Animation */
+@keyframes ticker-scroll {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: ticker-scroll 32s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* Keyframe animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #047857;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #059669;
+}

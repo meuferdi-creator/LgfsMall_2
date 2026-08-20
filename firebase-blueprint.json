@@ -1,0 +1,96 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "A commerce product published by a vendor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique product ID" },
+        "title": { "type": "string", "maxLength": 100, "description": "Title of the product" },
+        "description": { "type": "string", "maxLength": 1000, "description": "Product details and specifications" },
+        "price": { "type": "number", "description": "Standard detail price in CFA Franc (XOF)" },
+        "wholesalePrice": { "type": "number", "description": "Bulk price in XOF" },
+        "wholesaleMinQty": { "type": "integer", "description": "Minimum quantity for wholesale price" },
+        "image": { "type": "string", "description": "URL of the product illustration" },
+        "category": { "type": "string", "enum": ["Mode & Textiles", "Cosmétiques & Beauté", "Alimentation", "Électronique"], "description": "Product category" },
+        "stock": { "type": "integer", "description": "Current inventory count" },
+        "vendorId": { "type": "string", "description": "ID of the owner vendor" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "description", "price", "stock", "category", "vendorId"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "An escrow-based purchase order",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique order ID" },
+        "buyerId": { "type": "string", "description": "ID of the buyer user" },
+        "status": { "type": "string", "enum": ["PENDING", "PAID", "ESCROW_HELD", "DISPATCHED", "DELIVERED", "COMPLETED", "CANCELLED"] },
+        "total": { "type": "number", "description": "Total order amount in XOF" },
+        "currency": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "escrowWalletId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["buyerId", "status", "total"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "A rating and comment left by a buyer on a product",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique review ID" },
+        "productId": { "type": "string", "description": "ID of the reviewed product" },
+        "productTitle": { "type": "string", "maxLength": 100, "description": "Name of the reviewed product" },
+        "vendorId": { "type": "string", "description": "ID of the product's vendor" },
+        "buyerId": { "type": "string", "description": "ID of the author buyer" },
+        "buyerName": { "type": "string", "maxLength": 50, "description": "Name of the author buyer" },
+        "rating": { "type": "integer", "description": "Rating score between 1 and 5" },
+        "comment": { "type": "string", "maxLength": 500, "description": "Review text" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["productId", "productTitle", "vendorId", "buyerId", "buyerName", "rating", "comment"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "An alert dispatched to a vendor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique notification ID" },
+        "vendorId": { "type": "string", "description": "Recipient vendor ID" },
+        "type": { "type": "string", "enum": ["NEW_REVIEW"], "description": "Category of alert" },
+        "message": { "type": "string", "maxLength": 200 },
+        "read": { "type": "boolean", "description": "Is this notification read" },
+        "productId": { "type": "string" },
+        "productTitle": { "type": "string" },
+        "rating": { "type": "integer" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["vendorId", "type", "message", "read"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Collection of all marketplace products"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Collection of escrow-held purchases"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Collection of ratings and written feedback left by shoppers"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "Collection of system alerts received by vendors"
+    }
+  }
+}
