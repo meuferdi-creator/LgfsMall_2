@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { sendPasswordResetEmail } from "firebase/auth";
-import { auth, isFirebaseConfigured } from "../lib/firebase";
 import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
 import { KeyRound, Mail, ArrowLeft, CheckCircle2, AlertCircle, Loader2, RefreshCw, X } from "lucide-react";
 
@@ -85,40 +83,27 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
     setIsLoading(true);
 
     try {
-      if (isSupabaseConfigured) {
-        const { error } = await supabase.auth.resetPasswordForEmail(cleanedEmail, {
-          redirectTo: `${window.location.origin}/reset-password`,
-        });
-        if (error) throw error;
-        console.log("⚡ [Supabase Auth] Password reset email sent to:", cleanedEmail);
-      } else if (isFirebaseConfigured && auth) {
-        await sendPasswordResetEmail(auth, cleanedEmail);
-        console.log("🔥 [Firebase Auth] Password reset email sent to:", cleanedEmail);
-      } else {
-        // Fallback simulation for iframe / local sandbox environments
-        console.log("ℹ️ [Simulated Auth] Password reset email processed for:", cleanedEmail);
-        await new Promise((res) => setTimeout(res, 800));
+      // Accounts live in our own Prisma database (not Firebase/Supabase Auth), so the
+      // reset flow must go through our own backend, which issues a hashed, expiring
+      // token (see /api/auth/forgot-password + /api/auth/reset-password in server.ts).
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: cleanedEmail }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Une erreur est survenue lors de l'envoi de l'email.");
       }
 
+      // The backend always responds with a generic success message, whether or not
+      // the account exists, to prevent leaking which emails are registered.
       setIsSuccess(true);
       setCooldown(60); // 60 seconds cooldown for security rate limiting
     } catch (error: any) {
       console.error("❌ Error sending password reset email:", error);
-      const code = error?.code || "";
-
-      if (code === "auth/invalid-email") {
-        setErrorMessage("Format d'adresse email invalide.");
-      } else if (code === "auth/user-not-found") {
-        // For security & email enumeration prevention, we still treat this as success or neutral
-        setIsSuccess(true);
-        setCooldown(60);
-      } else if (code === "auth/too-many-requests") {
-        setErrorMessage("Trop de tentatives. Veuillez patienter quelques minutes avant de réessayer.");
-      } else if (code === "auth/network-request-failed") {
-        setErrorMessage("Erreur de connexion réseau. Veuillez vérifier votre accès à Internet.");
-      } else {
-        setErrorMessage("Une erreur est survenue lors de l'envoi de l'email. Veuillez réessayer.");
-      }
+      setErrorMessage(error?.message || "Une erreur est survenue lors de l'envoi de l'email. Veuillez réessayer.");
     } finally {
       setIsLoading(false);
     }
@@ -171,7 +156,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
           {!isSuccess ? (
             <form onSubmit={handleSendResetLink} className="space-y-4">
               <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                Saisissez l'adresse email associée à votre compte LGF's Mall. Nous vous enverrons un lien sécurisé Firebase pour définir un nouveau mot de passe.
+                Saisissez l'adresse email associée à votre compte LGF's Mall. Nous vous enverrons un lien sécurisé pour définir un nouveau mot de passe.
               </p>
 
               {errorMessage && (

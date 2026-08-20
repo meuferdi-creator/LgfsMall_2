@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Tv, Users, Heart, Send, ShoppingBag, X, Star, Shield, ArrowRight } from "lucide-react";
 import { Product } from "../types";
+import { getOptimizedImageUrl } from "../utils/imageOptimizer";
+import { safeJson } from "../lib/utils";
 
 interface LiveCommerceProps {
   user: any;
@@ -44,20 +46,22 @@ export default function LiveCommerce({ user, products, formatCurrency, onBuyProd
     try {
       const res = await fetch("/api/livestreams");
       if (res.ok) {
-        const data = await res.json();
-        setStreams(data);
-        
-        // If we are vendor and there is an active stream, set it
-        if (user && user.role === "VENDOR") {
-          const myLive = data.find((s: any) => s.vendorId === user.id);
-          if (myLive) {
-            setActiveStream(myLive);
-            setIsLive(true);
+        const data = await safeJson(res);
+        if (Array.isArray(data)) {
+          setStreams(data);
+          
+          // If we are vendor and there is an active stream, set it
+          if (user && user.role === "VENDOR") {
+            const myLive = data.find((s: any) => s.vendorId === user.id);
+            if (myLive) {
+              setActiveStream(myLive);
+              setIsLive(true);
+            }
           }
         }
       }
     } catch (e) {
-      console.error(e);
+      console.warn("Notice: fetchStreams failed", e);
     }
   };
 
@@ -75,17 +79,19 @@ export default function LiveCommerce({ user, products, formatCurrency, onBuyProd
       try {
         const res = await fetch(`/api/livestreams/${activeStream.id}/messages`);
         if (res.ok) {
-          const data = await res.json();
-          const mapped = data.map((msg: any) => ({
-            id: msg.id,
-            senderName: msg.sender?.name || "Anonyme",
-            senderRole: msg.sender?.role || "BUYER",
-            content: msg.content
-          }));
-          setChatMessages(mapped);
+          const data = await safeJson(res);
+          if (Array.isArray(data)) {
+            const mapped = data.map((msg: any) => ({
+              id: msg.id,
+              senderName: msg.sender?.name || "Anonyme",
+              senderRole: msg.sender?.role || "BUYER",
+              content: msg.content
+            }));
+            setChatMessages(mapped);
+          }
         }
       } catch (e) {
-        console.error(e);
+        console.warn("Notice: fetchChat failed", e);
       }
     };
 
@@ -329,8 +335,10 @@ export default function LiveCommerce({ user, products, formatCurrency, onBuyProd
                 >
                   <div className="relative h-40 bg-emerald-950 flex items-center justify-center">
                     <img 
-                      src={str.url || "https://images.unsplash.com/photo-1516280440614-37939bbacd6a?w=800"} 
+                      src={getOptimizedImageUrl(str.url, 600, 70)} 
                       alt={str.title} 
+                      loading="lazy"
+                      decoding="async"
                       className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-500"
                     />
                     <div className="absolute top-3 left-3 bg-rose-600 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full flex items-center space-x-1 border border-rose-500 shadow-sm">
@@ -370,8 +378,10 @@ export default function LiveCommerce({ user, products, formatCurrency, onBuyProd
             <div className="absolute inset-0 bg-gradient-to-t from-emerald-950 via-transparent to-emerald-950/90 pointer-events-none"></div>
 
             <img 
-              src={activeStream.url || "https://images.unsplash.com/photo-1516280440614-37939bbacd6a?w=800"} 
+              src={getOptimizedImageUrl(activeStream.url, 800, 70)} 
               alt="Live Screen Background" 
+              loading="eager"
+              decoding="async"
               className="absolute inset-0 w-full h-full object-cover opacity-35 z-0"
             />
 
@@ -441,8 +451,10 @@ export default function LiveCommerce({ user, products, formatCurrency, onBuyProd
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-12 bg-emerald-950 rounded-xl overflow-hidden border border-white/10 flex-shrink-0">
                   <img 
-                    src={featuredProduct?.image || "https://images.unsplash.com/photo-1516280440614-37939bbacd6a?w=800"} 
+                    src={getOptimizedImageUrl(featuredProduct?.image, 200, 65)} 
                     alt="Featured Product" 
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover"
                   />
                 </div>

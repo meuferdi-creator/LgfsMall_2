@@ -1,22 +1,9 @@
 import fs from "fs";
 import path from "path";
-
-const sourceDbPath = path.resolve(process.cwd(), "prisma", "dev.db");
-const productionDbPath = path.join("/tmp", "prisma", "dev.db");
-
-let activeDbFile = sourceDbPath;
-if (fs.existsSync(productionDbPath)) {
-  activeDbFile = productionDbPath;
-}
-
-process.env.DATABASE_URL = `file:${activeDbFile}`;
-console.log(`Using Database URL: ${process.env.DATABASE_URL}`);
-
-import { PrismaClient } from "@prisma/client";
-const prisma = new PrismaClient();
+import { prisma } from "./src/db/prisma.js";
 
 async function exportData() {
-  console.log("Starting database backup dump from SQLite...");
+  console.log("Starting database backup dump from PostgreSQL...");
 
   const users = await prisma.user.findMany({
     include: { kyc: true, escrowWallet: true }
@@ -31,7 +18,7 @@ async function exportData() {
 
   const backupData = {
     exportDate: new Date().toISOString(),
-    sourceFile: activeDbFile,
+    databaseType: "PostgreSQL (Cloud SQL)",
     counts: {
       users: users.length,
       kycs: kycs.length,
@@ -59,10 +46,10 @@ async function exportData() {
   console.log("Summary of dumped records:\n", JSON.stringify(backupData.counts, null, 2));
 
   console.log("\n--- USER ACCOUNTS ---");
-  users.forEach(u => console.log(`- [${u.role}] ID: ${u.id} | ${u.name} | ${u.email}`));
+  users.forEach((u: (typeof users)[number]) => console.log(`- [${u.role}] ID: ${u.id} | ${u.name} | ${u.email}`));
 
   console.log("\n--- PRODUCTS ---");
-  products.forEach(p => console.log(`- ID: ${p.id} | ${p.title} | Price: ${p.price} XOF | Stock: ${p.stock}`));
+  products.forEach((p: (typeof products)[number]) => console.log(`- ID: ${p.id} | ${p.title} | Price: ${p.price} XOF | Stock: ${p.stock}`));
 }
 
 exportData()

@@ -15,7 +15,9 @@ import {
   Check
 } from "lucide-react";
 import { Product } from "../types";
+import { useTranslation } from "../hooks/useTranslation";
 import EcobankPaymentCard from "./EcobankPaymentCard";
+import TMoneyPaymentCard from "./TMoneyPaymentCard";
 
 export interface CartItem {
   id: string; // unique cart item compound key
@@ -68,6 +70,8 @@ export default function CartDrawer({
   const [paymentMethod, setPaymentMethod] = useState("TMoney");
   const [paymentPhone, setPaymentPhone] = useState("");
 
+  const { t } = useTranslation();
+
   if (!isOpen) return null;
 
   // Group items by vendor
@@ -99,26 +103,49 @@ export default function CartDrawer({
   });
 
   // Promo Code Validation
-  const handleApplyPromo = () => {
+  const handleApplyPromo = async () => {
     setPromoError(null);
     const code = promoCode.trim().toUpperCase();
-    
-    if (code === "LGF2026") {
-      setPromoDiscount(15); // 15% discount
-      setPromoApplied(code);
-      setPromoError(null);
-    } else if (code === "ASSIGAME") {
-      setPromoDiscount(10); // 10% discount
-      setPromoApplied(code);
-      setPromoError(null);
-    } else if (code === "TOGO") {
-      setPromoDiscount(5); // 5% discount
-      setPromoApplied(code);
-      setPromoError(null);
-    } else {
-      setPromoError("Code promo invalide ou expiré.");
-      setPromoDiscount(0);
-      setPromoApplied(null);
+    if (!code) return;
+
+    try {
+      const res = await fetch("/api/coupons/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, totalAmount: totalProductCost })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.valid) {
+        if (data.discountType === "PERCENTAGE") {
+          setPromoDiscount(data.discountValue);
+        } else {
+          // If fixed amount FCFA discount, convert to equivalent % or set directly
+          const equivalentPercent = Math.min(100, Math.round((data.discountAmount / (totalProductCost || 1)) * 100));
+          setPromoDiscount(equivalentPercent);
+        }
+        setPromoApplied(data.code);
+        setPromoError(null);
+      } else {
+        setPromoError(data.error || "Code promo invalide ou expiré.");
+        setPromoDiscount(0);
+        setPromoApplied(null);
+      }
+    } catch (err) {
+      // Local fallback
+      if (code === "LGF2026" || code === "LGF10") {
+        setPromoDiscount(10);
+        setPromoApplied(code);
+        setPromoError(null);
+      } else if (code === "AVEDJI20") {
+        setPromoDiscount(20);
+        setPromoApplied(code);
+        setPromoError(null);
+      } else {
+        setPromoError("Code promo invalide ou expiré.");
+        setPromoDiscount(0);
+        setPromoApplied(null);
+      }
     }
   };
 
@@ -208,15 +235,15 @@ export default function CartDrawer({
                 <ShoppingBag className="w-4.5 h-4.5 stroke-[2.5]" />
               </div>
               <div>
-                <h3 id="cart-drawer-title" className="font-extrabold text-sm tracking-tight">Panier Séquestre LGF</h3>
+                <h3 id="cart-drawer-title" className="font-extrabold text-sm tracking-tight">{t.cartTitle}</h3>
                 <span className="text-[10px] text-yellow-500 font-mono font-bold block leading-none">
-                  Multi-Vendeurs d'Assigamé
+                  {t.officialStore}
                 </span>
               </div>
             </div>
             <button 
               onClick={onClose}
-              aria-label="Fermer le panier"
+              aria-label={t.close}
               className="text-emerald-300 hover:text-white p-2.5 rounded-xl cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -225,11 +252,11 @@ export default function CartDrawer({
 
           {/* Stepper Header (Checkout Workflow) */}
           <div className="bg-slate-50 border-b border-slate-200 px-6 py-3 flex justify-between items-center text-[10px] font-bold font-mono text-slate-500 shrink-0">
-            <span className={`${checkoutStep === "cart" ? "text-emerald-600 font-black" : ""}`}>1. MON PANIER</span>
+            <span className={`${checkoutStep === "cart" ? "text-emerald-600 font-black" : ""}`}>1. {t.myCart.toUpperCase()}</span>
             <ChevronRight className="w-3 h-3 text-slate-400" />
-            <span className={`${checkoutStep === "address" ? "text-emerald-600 font-black" : ""}`}>2. LIVRAISON (GPS)</span>
+            <span className={`${checkoutStep === "address" ? "text-emerald-600 font-black" : ""}`}>2. {t.fastDelivery.toUpperCase()}</span>
             <ChevronRight className="w-3 h-3 text-slate-400" />
-            <span className={`${checkoutStep === "payment" ? "text-emerald-600 font-black" : ""}`}>3. FINANCES & PAIEMENT</span>
+            <span className={`${checkoutStep === "payment" ? "text-emerald-600 font-black" : ""}`}>3. {t.securePayments.toUpperCase()}</span>
           </div>
 
           {/* Drawer Body (Content area) */}
@@ -240,13 +267,13 @@ export default function CartDrawer({
                 {cart.length === 0 ? (
                   <div className="text-center py-20 space-y-4">
                     <ShoppingBag className="w-16 h-16 text-emerald-300 mx-auto" />
-                    <p className="text-sm font-bold text-emerald-600">Votre panier LGF est actuellement vide.</p>
-                    <p className="text-xs text-slate-400 max-w-xs mx-auto">Parcourez le catalogue d'Assigamé et ajoutez des textiles, cosmétiques ou alimentation.</p>
+                    <p className="text-sm font-bold text-emerald-600">{t.emptyCart}</p>
+                    <p className="text-xs text-slate-400 max-w-xs mx-auto">{t.emptyCartSubtitle}</p>
                     <button
                       onClick={onClose}
                       className="bg-emerald-600 text-white font-bold text-xs py-2.5 px-6 rounded-xl shadow cursor-pointer"
                     >
-                      Continuer les achats
+                      {t.continueShopping}
                     </button>
                   </div>
                 ) : (
@@ -543,16 +570,19 @@ export default function CartDrawer({
                   )}
 
                   {(paymentMethod === "TMoney" || paymentMethod === "Flooz") && (
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-emerald-700 uppercase block font-mono">Numéro Mobile Money (+228) :</label>
-                      <input
-                        type="text"
-                        placeholder="Ex: 90 12 34 56"
-                        value={paymentPhone}
-                        onChange={(e) => setPaymentPhone(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-800 font-mono"
-                        required
-                      />
+                    <div className="space-y-3 pt-1">
+                      <TMoneyPaymentCard amount={grandTotal} method={paymentMethod} formatCurrency={formatCurrency} />
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-emerald-700 uppercase block font-mono">Votre Numéro Mobile Money (+228) :</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: 90 12 34 56"
+                          value={paymentPhone}
+                          onChange={(e) => setPaymentPhone(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-800 font-mono"
+                          required
+                        />
+                      </div>
                     </div>
                   )}
                 </div>

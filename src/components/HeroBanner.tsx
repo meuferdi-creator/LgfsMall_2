@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Tag, Phone, ShieldCheck, Truck, Smartphone, ChevronLeft, ChevronRight, Zap, ArrowRight, Sparkles } from "lucide-react";
+import { useTranslation } from "../hooks/useTranslation";
 
 interface HeroSlide {
   id: string;
@@ -24,7 +25,7 @@ const HERO_SLIDES: HeroSlide[] = [
     subtitle: "Samsung, Tecno, Xiaomi, iPhone reconditionné — profitez de ventes flash quotidiennes, garantie locale et livraison express à Lomé en 24h.",
     primaryBtnText: "Voir les ventes flash",
     secondaryBtnText: "Tous les téléphones",
-    bgImage: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1600&q=80",
+    bgImage: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=70",
     tags: ["Mobile Money", "Livraison Lomé 24h", "Paiement sécurisé"]
   },
   {
@@ -36,7 +37,7 @@ const HERO_SLIDES: HeroSlide[] = [
     subtitle: "Tenues traditionnelles, tissus authentiques et accessoires fabriqués au Togo. Commandez en détail ou bénéficiez de prix de gros négociés.",
     primaryBtnText: "Découvrir la Mode",
     secondaryBtnText: "Commander en Gros",
-    bgImage: "https://images.unsplash.com/photo-1590736704728-f4730bb30770?auto=format&fit=crop&w=1600&q=80",
+    bgImage: "https://images.unsplash.com/photo-1590736704728-f4730bb30770?auto=format&fit=crop&w=1200&q=70",
     tags: ["100% Fait au Togo", "Wholesale Discounts", "Livraison Régions"]
   },
   {
@@ -48,7 +49,7 @@ const HERO_SLIDES: HeroSlide[] = [
     subtitle: "Réfrigérateurs, climatiseurs, cuisinières et ustensiles de cuisine. Séquestre LGF : vos fonds restent bloqués jusqu'à livraison conforme.",
     primaryBtnText: "Nos Électroménagers",
     secondaryBtnText: "Garantie 12 Mois",
-    bgImage: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=1600&q=80",
+    bgImage: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=1200&q=70",
     tags: ["Paiement Escrow", "Installation Inclus", "Support +228 72 99 81 48"]
   }
 ];
@@ -59,6 +60,7 @@ interface HeroBannerProps {
 }
 
 export default function HeroBanner({ onSelectCategory, onOpenFlashDeals }: HeroBannerProps) {
+  const { t } = useTranslation();
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
 
   useEffect(() => {
@@ -115,14 +117,14 @@ export default function HeroBanner({ onSelectCategory, onOpenFlashDeals }: HeroB
               className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3.5 rounded-2xl text-xs sm:text-sm font-extrabold transition-all shadow-lg shadow-emerald-600/30 hover:scale-105 flex items-center space-x-2 cursor-pointer active:scale-95"
             >
               <Tag className="w-4 h-4" />
-              <span>{slide.primaryBtnText}</span>
+              <span>{slide.primaryBtnText || t.flashDeals}</span>
             </button>
             <button
               onClick={() => onSelectCategory ? onSelectCategory("Électronique") : null}
               className="bg-white/10 hover:bg-white/20 text-white backdrop-blur-md px-6 py-3.5 rounded-2xl text-xs sm:text-sm font-bold transition-all border border-white/20 flex items-center space-x-2 cursor-pointer active:scale-95"
             >
               <Smartphone className="w-4 h-4" />
-              <span>{slide.secondaryBtnText}</span>
+              <span>{slide.secondaryBtnText || t.exploreMarketplace}</span>
             </button>
           </div>
         </div>
@@ -134,15 +136,15 @@ export default function HeroBanner({ onSelectCategory, onOpenFlashDeals }: HeroB
           <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-slate-200">
             <div className="flex items-center space-x-1.5 bg-slate-900/60 px-3 py-1.5 rounded-full border border-white/10">
               <Smartphone className="w-3.5 h-3.5 text-amber-400" />
-              <span>Mobile Money</span>
+              <span>TMoney & Flooz</span>
             </div>
             <div className="flex items-center space-x-1.5 bg-slate-900/60 px-3 py-1.5 rounded-full border border-white/10">
               <Truck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Livraison Lomé 24h</span>
+              <span>{t.fastDelivery} (24h)</span>
             </div>
             <div className="flex items-center space-x-1.5 bg-slate-900/60 px-3 py-1.5 rounded-full border border-white/10">
               <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
-              <span>Paiement sécurisé</span>
+              <span>{t.escrowProtected}</span>
             </div>
           </div>
 
@@ -170,7 +172,7 @@ export default function HeroBanner({ onSelectCategory, onOpenFlashDeals }: HeroB
       <button
         onClick={handlePrev}
         className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/60 text-white backdrop-blur-md flex items-center justify-center opacity-80 hover:opacity-100 hover:bg-slate-900 transition-all border border-white/20 cursor-pointer z-20"
-        title="Précédent"
+        title={t.back}
       >
         <ChevronLeft className="w-5 h-5" />
       </button>

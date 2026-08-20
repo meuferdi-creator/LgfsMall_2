@@ -1,3 +1,16 @@
-Since the only file change is the addition of `.gitignore` itself with no other files present in the change list, there are no build artifacts, dependencies, or temporary files to ignore. The change list contains only the `.gitignore` file itself, which doesn't warrant any ignore rules.
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
 
-Therefore, the output is empty.
+# SQLite & local DB artifacts
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+prisma/*.db*

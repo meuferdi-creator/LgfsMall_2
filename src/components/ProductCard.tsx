@@ -1,25 +1,31 @@
 import React, { useState, useEffect } from "react";
-import { ShoppingBag, ArrowRight, Check, HelpCircle, Layers, TrendingDown, Heart } from "lucide-react";
+import { ShoppingBag, ArrowRight, Check, HelpCircle, Layers, TrendingDown, Heart, Store } from "lucide-react";
 import { Product } from "../types";
 import { firestoreSync } from "../lib/firebase";
 import { useAppStore } from "../store";
+import { translations } from "../translations";
+import { getOptimizedImageUrl } from "../utils/imageOptimizer";
 
 interface ProductCardProps {
   product: Product;
   formatCurrency: (value: number) => string;
-  onBuy: (productId: string, quantity: number) => void;
+  onBuy: (productId: string, quantity: number, color?: string) => void;
   actionText?: string;
   onOpenDetail?: (product: Product) => void;
+  onOpenStore?: (vendorId: string, storeName: string) => void;
 }
 
 export default function ProductCard({
   product,
   formatCurrency,
   onBuy,
-  actionText = "Acheter avec Escrow",
-  onOpenDetail
+  actionText,
+  onOpenDetail,
+  onOpenStore
 }: ProductCardProps) {
-  const { wishlist, toggleWishlist } = useAppStore();
+  const { wishlist, toggleWishlist, lang } = useAppStore();
+  const t = translations[lang] || translations.FR;
+  const effectiveActionText = actionText || t.buyNow || "Acheter avec Escrow";
   const isFavorite = wishlist.includes(product.id);
   const [qty, setQty] = useState(1);
   const [vendorProfile, setVendorProfile] = useState<any | null>(null);
@@ -47,12 +53,44 @@ export default function ProductCard({
     loadVendorProfile();
   }, [product.vendorId]);
 
+  // Variants & Colors handling
+  const parsedVariants: { color: string; price?: number }[] = Array.isArray(product.variants)
+    ? product.variants
+    : (typeof product.variants === "string" ? (() => { try { return JSON.parse(product.variants); } catch (e) { return []; } })() : []);
+
+  const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
+  const activeVariant = parsedVariants[selectedVariantIdx];
+
+  // Touch handlers for responsive mobile tap without scroll interference
+  const touchStartPos = React.useRef<{ x: number; y: number } | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartPos.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartPos.current) return;
+    const touchEnd = e.changedTouches[0];
+    const dx = Math.abs(touchEnd.clientX - touchStartPos.current.x);
+    const dy = Math.abs(touchEnd.clientY - touchStartPos.current.y);
+    if (dx < 10 && dy < 10) {
+      if (onOpenDetail) {
+        onOpenDetail(product);
+      }
+    }
+    touchStartPos.current = null;
+  };
+
   const hasWholesale = !!(product.wholesalePrice && product.wholesaleMinQty);
   const wholesaleMin = product.wholesaleMinQty || 1;
   const wholesalePrice = product.wholesalePrice || product.price;
 
   const isWholesaleActive = hasWholesale && qty >= wholesaleMin;
-  const activeUnitPrice = isWholesaleActive ? wholesalePrice : product.price;
+  const basePrice = activeVariant?.price ? activeVariant.price : product.price;
+  const activeUnitPrice = isWholesaleActive ? wholesalePrice : basePrice;
   const totalPrice = activeUnitPrice * qty;
 
   // Calculate savings percentage and absolute savings
@@ -102,13 +140,17 @@ export default function ProductCard({
     >
       <div 
         onClick={() => onOpenDetail && onOpenDetail(product)} 
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
         className={onOpenDetail ? "cursor-pointer" : ""}
       >
         {/* Product Image & Badge Overlay */}
         <div className="relative aspect-video bg-emerald-50/30 dark:bg-emerald-900/40 overflow-hidden">
           <img
-            src={activeImage}
+            src={getOptimizedImageUrl(activeImage, 500, 70)}
             alt={product.title}
+            loading="lazy"
+            decoding="async"
             referrerPolicy="no-referrer"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
@@ -191,33 +233,151 @@ export default function ProductCard({
             <h4 className="font-extrabold text-sm text-emerald-950 dark:text-white leading-tight group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors font-display">
               {product.title}
             </h4>
+
+            {/* Vendor Badge & Store Name explicitly below product title */}
+            <div className="mt-1.5 mb-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onOpenStore && product.vendorId) {
+                    onOpenStore(product.vendorId, vendorProfile?.shopName || product.vendor?.name || "LGF's Mall");
+                  }
+                }}
+                className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-emerald-100/80 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 text-[11px] font-bold border border-emerald-200/60 dark:border-emerald-700/60 hover:text-emerald-900 dark:hover:text-white transition-colors cursor-pointer"
+              >
+                <Store className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span className="truncate max-w-[180px]">{vendorProfile?.shopName || product.vendor?.name || "LGF's Mall"}</span>
+              </button>
+            </div>
+
             <p className="text-xs text-emerald-800 dark:text-emerald-200/90 line-clamp-2 leading-relaxed mt-1">
               {product.description}
             </p>
           </div>
 
-          {/* Pricing Stats Grid */}
-          <div className="p-3.5 bg-emerald-50/50 dark:bg-emerald-900/50 rounded-2xl border border-emerald-100/50 dark:border-emerald-800/60 grid grid-cols-2 gap-2 text-xs">
-            <div>
-              <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase font-mono block">Prix de Détail :</span>
-              <span className={`font-extrabold text-sm block ${isWholesaleActive ? "line-through text-slate-400 dark:text-slate-500" : "text-emerald-950 dark:text-white"}`}>
-                {formatCurrency(product.price)}
-              </span>
+          {/* Color Variants Pills (if available) */}
+          {parsedVariants.length > 0 && (
+            <div className="space-y-1.5 p-2 bg-emerald-50/40 dark:bg-emerald-900/30 rounded-xl border border-emerald-100/40 dark:border-emerald-800/40">
+              <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase font-mono block">Couleur disponible :</span>
+              <div className="flex flex-wrap gap-1">
+                {parsedVariants.map((v, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedVariantIdx(idx);
+                    }}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer border ${
+                      selectedVariantIdx === idx
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                        : "bg-white dark:bg-emerald-950/80 text-slate-700 dark:text-emerald-200 border-slate-200 dark:border-emerald-800 hover:border-emerald-400"
+                    }`}
+                  >
+                    {v.color} {v.price && v.price !== product.price ? `(${formatCurrency(v.price)})` : ""}
+                  </button>
+                ))}
+              </div>
             </div>
-            {hasWholesale ? (
-              <div>
-                <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 uppercase font-mono block">Prix de Gros :</span>
-                <span className={`font-extrabold text-sm block ${isWholesaleActive ? "text-amber-600 dark:text-amber-400 font-black text-base" : "text-slate-500 dark:text-slate-400"}`}>
-                  {formatCurrency(wholesalePrice)}
+          )}
+
+          {/* Pricing Stats - Spacious, Clear & Non-Truncated */}
+          <div className="p-3.5 bg-emerald-50/80 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200/80 dark:border-emerald-800/70 shadow-2xs space-y-2.5">
+            {/* 1. Prix à l'unité */}
+            <div className="bg-white/95 dark:bg-emerald-900/60 p-2.5 sm:p-3 rounded-xl border border-emerald-100 dark:border-emerald-800/60 flex items-center justify-between gap-3 shadow-2xs">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-wider font-mono">
+                  Prix à l'unité
                 </span>
-                <span className="text-[8px] text-amber-600 dark:text-amber-400 block font-bold uppercase mt-0.5">Dès {wholesaleMin} pièces</span>
+                <span className="text-[9px] text-slate-400 dark:text-slate-400 font-medium">
+                  Tarif au détail
+                </span>
+              </div>
+              <div className="text-right">
+                <span
+                  className={`font-mono font-black text-sm sm:text-base whitespace-nowrap block ${
+                    isWholesaleActive
+                      ? "line-through text-slate-400 dark:text-slate-500 text-xs"
+                      : "text-emerald-950 dark:text-white"
+                  }`}
+                >
+                  {formatCurrency(basePrice)}
+                </span>
+              </div>
+            </div>
+
+            {/* 2. Prix de gros ou info boutique */}
+            {hasWholesale ? (
+              <div
+                className={`p-2.5 sm:p-3 rounded-xl border transition-all shadow-2xs flex items-center justify-between gap-3 ${
+                  isWholesaleActive
+                    ? "bg-amber-500 text-white border-amber-600 shadow-xs"
+                    : "bg-amber-50/95 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800/70 text-amber-900 dark:text-amber-100"
+                }`}
+              >
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span
+                      className={`text-[10px] font-black uppercase tracking-wider font-mono ${
+                        isWholesaleActive ? "text-amber-100" : "text-amber-800 dark:text-amber-300"
+                      }`}
+                    >
+                      Prix de gros
+                    </span>
+                    <span
+                      className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded leading-none font-mono ${
+                        isWholesaleActive
+                          ? "bg-amber-700 text-white"
+                          : "bg-amber-100 dark:bg-amber-900/90 text-amber-900 dark:text-amber-200 border border-amber-300/80 dark:border-amber-700/60"
+                      }`}
+                    >
+                      Dès {wholesaleMin} pcs
+                    </span>
+                  </div>
+                  <span
+                    className={`text-[9px] font-bold mt-0.5 ${
+                      isWholesaleActive ? "text-amber-100" : "text-amber-700 dark:text-amber-400"
+                    }`}
+                  >
+                    -{savingsPercent}% par article
+                  </span>
+                </div>
+                <div className="text-right shrink-0">
+                  <span
+                    className={`font-mono font-black text-sm sm:text-base whitespace-nowrap block ${
+                      isWholesaleActive ? "text-white" : "text-amber-700 dark:text-amber-300"
+                    }`}
+                  >
+                    {formatCurrency(wholesalePrice)}
+                  </span>
+                </div>
               </div>
             ) : (
-              <div>
-                <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase font-mono block">Vendeur vérifié :</span>
-                <span className="font-semibold text-[10px] text-emerald-900 dark:text-emerald-200 truncate block mt-0.5">
-                  {product.vendor?.name || "Boutique d'Assigamé"}
-                </span>
+              <div className="bg-white/95 dark:bg-emerald-900/60 p-2.5 sm:p-3 rounded-xl border border-emerald-100 dark:border-emerald-800/60 flex items-center justify-between gap-3 shadow-2xs">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider font-mono">
+                    Boutique
+                  </span>
+                  <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                    Vendeur vérifié
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onOpenStore && product.vendorId) {
+                      onOpenStore(
+                        product.vendorId,
+                        vendorProfile?.shopName || product.vendor?.name || "Boutique d'Assigamé"
+                      );
+                    }
+                  }}
+                  className="font-bold text-xs text-emerald-700 hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-100 underline truncate max-w-[130px] text-right cursor-pointer"
+                >
+                  {vendorProfile?.shopName || product.vendor?.name || "Boutique d'Assigamé"}
+                </button>
               </div>
             )}
           </div>
@@ -313,7 +473,7 @@ export default function ProductCard({
         <div className="space-y-2">
           <button
             disabled={product.stock === 0}
-            onClick={() => onBuy(product.id, qty)}
+            onClick={() => onBuy(product.id, qty, activeVariant?.color)}
             className={`w-full font-bold py-3 px-4 rounded-2xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer ${
               product.stock === 0
                 ? "bg-slate-100 text-slate-400 cursor-not-allowed"
@@ -323,7 +483,7 @@ export default function ProductCard({
             }`}
           >
             <ShoppingBag className="w-4 h-4" />
-            <span>{product.stock === 0 ? "En Rupture" : actionText}</span>
+            <span>{product.stock === 0 ? (t.outOfStock || "Rupture de stock") : effectiveActionText}</span>
           </button>
 
           <a

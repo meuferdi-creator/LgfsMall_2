@@ -1,6 +1,8 @@
 import { create } from "zustand";
-import { User, PlatformStats, Kyc, SupportedLanguage, UserRole, Product, Order, Investment } from "./types";
+import { User, PlatformStats, Kyc, SupportedLanguage, UserRole, Product, Order, Investment, InvestmentProject } from "./types";
 import { firestoreSync } from "./lib/firebase";
+import { DEFAULT_CATALOG_PRODUCTS } from "./data/defaultProducts";
+import { safeJson } from "./lib/utils";
 
 export interface CartItem {
   id: string;
@@ -22,6 +24,7 @@ interface AppState {
   buyerOrders: Order[];
   vendorOrders: Order[];
   investments: Investment[];
+  investmentProjects: InvestmentProject[];
   isLoading: boolean;
   error: string | null;
   successMessage: string | null;
@@ -31,15 +34,19 @@ interface AppState {
   wishlist: string[];
   
   setLanguage: (lang: SupportedLanguage) => void;
+  setError: (err: string | null) => void;
   clearMessages: () => void;
   initSession: () => Promise<void>;
   login: (email: string, password: string) => Promise<boolean>;
-  loginWithGoogle: (data: { email: string; name: string; uid: string; role?: UserRole; phone?: string }) => Promise<boolean>;
+  loginWithGoogle: (data: { email: string; name: string; uid: string; role?: UserRole; phone?: string; idToken?: string }) => Promise<boolean>;
+  loginWithSupabaseOAuthData: (user: any, token: string) => void;
   register: (data: { email: string; name: string; password: string; phone: string; role: UserRole }) => Promise<boolean>;
   verifyEmail: (email: string, token?: string) => Promise<boolean>;
   logout: () => void;
   fetchStats: () => Promise<void>;
   submitKyc: (data: { documentType: string; idNumber: string; documentUrl?: string }) => Promise<boolean>;
+  updateUserProfile: (data: { name?: string; phone?: string }) => Promise<boolean>;
+  activateWorkspaceAccount: (workspace: "VENDOR" | "DRIVER" | "INVESTOR") => Promise<boolean>;
   fetchPendingKycs: () => Promise<void>;
   fetchAllUsers: () => Promise<void>;
   verifyKyc: (kycId: string, status: "APPROVED" | "REJECTED", rejectionReason?: string) => Promise<boolean>;
@@ -56,6 +63,10 @@ interface AppState {
   withdrawEscrowFunds: (data: { method: string; accountNumber: string }) => Promise<boolean>;
   fetchInvestments: () => Promise<void>;
   createInvestment: (amount: number) => Promise<boolean>;
+  fetchInvestmentProjects: (status?: string, search?: string) => Promise<void>;
+  createInvestmentProject: (data: Partial<InvestmentProject>) => Promise<boolean>;
+  updateInvestmentProject: (id: string, data: Partial<InvestmentProject>) => Promise<boolean>;
+  deleteInvestmentProject: (id: string) => Promise<boolean>;
   
   addToCart: (product: Product, quantity: number, size?: string, color?: string) => void;
   removeFromCart: (itemId: string) => void;
@@ -72,15 +83,16 @@ const API_BASE = "/api";
 export const useAppStore = create<AppState>((set, get) => ({
   user: null,
   token: null,
-  lang: "FR",
+  lang: (typeof window !== "undefined" && (localStorage.getItem("lgf_lang") as SupportedLanguage)) || "FR",
   stats: null,
   pendingKycs: [],
   allUsers: [],
-  products: [],
+  products: DEFAULT_CATALOG_PRODUCTS,
   vendorProducts: [],
   buyerOrders: [],
   vendorOrders: [],
   investments: [],
+  investmentProjects: [],
   isLoading: false,
   error: null,
   successMessage: null,
@@ -89,8 +101,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   cart: [],
   wishlist: [],
 
-  setLanguage: (lang: SupportedLanguage) => set({ lang }),
+  setLanguage: (lang: SupportedLanguage) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("lgf_lang", lang);
+    }
+    set({ lang });
+  },
   
+  setError: (error) => set({ error }),
   clearMessages: () => set({ error: null, successMessage: null, requiresEmailVerification: false, pendingVerificationEmail: "" }),
 
   initSession: async () => {
@@ -108,11 +126,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         },
       });
       if (res.ok) {
-        const data = await res.json();
-        set({ user: data.user, error: null });
-        get().loadLocalCartAndWishlist();
-        if (data.user) {
+        const data = await safeJson(res);
+        if (data?.user) {
+          set({ user: data.user, error: null });
+          get().loadLocalCartAndWishlist();
           await get().syncCartWithFirebase(data.user.id);
+        } else {
+          localStorage.removeItem("lgf_token");
+          set({ token: null, user: null });
+          get().loadLocalCartAndWishlist();
         }
       } else {
         // Stale session
@@ -121,7 +143,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         get().loadLocalCartAndWishlist();
       }
     } catch (err) {
-      console.error("Session restoration error:", err);
+      console.warn("Session restoration notice:", err);
       get().loadLocalCartAndWishlist();
     } finally {
       set({ isLoading: false });
@@ -239,16 +261,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         return false;
       }
 
-      // SECURITY FIX: Check if email is actually verified before completing authentication
-      if (!data.verified && !data.user?.emailVerified) {
-        set({ 
-          error: "Veuillez confirmer votre adresse e-mail avant de continuer.",
-          requiresEmailVerification: true,
-          pendingVerificationEmail: email
-        });
-        return false;
-      }
-
       localStorage.setItem("lgf_token", data.token);
       set({ user: data.user, token: data.token, successMessage: data.message, error: null, requiresEmailVerification: false, pendingVerificationEmail: "" });
 
@@ -267,15 +279,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  loginWithGoogle: async ({ email, name, uid, role, phone }) => {
+  loginWithGoogle: async ({ email, name, uid, role, phone, idToken }) => {
     set({ isLoading: true, error: null, successMessage: null });
     try {
       const res = await fetch(`${API_BASE}/auth/firebase-sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, name, uid, role, phone }),
+        body: JSON.stringify({ email, name, uid, role, phone, idToken }),
       });
-      const data = await res.json();
+      const data = await safeJson(res);
 
       if (!res.ok) {
         set({ error: data.error || "Erreur lors de la synchronisation du compte Google." });
@@ -300,6 +312,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  loginWithSupabaseOAuthData: (user, token) => {
+    localStorage.setItem("lgf_token", token);
+    set({
+      user,
+      token,
+      successMessage: "Connexion réussie via Supabase OAuth 2.1 !",
+      error: null,
+      requiresEmailVerification: false,
+      pendingVerificationEmail: ""
+    });
+    if (user) {
+      firestoreSync.saveDocument("users", user.id, user);
+      get().syncCartWithFirebase(user.id);
+    }
+  },
+
   logout: () => {
     localStorage.removeItem("lgf_token");
     localStorage.removeItem("lgf_cart");
@@ -310,11 +338,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const res = await fetch(`${API_BASE}/stats`);
       if (res.ok) {
-        const data = await res.json();
-        set({ stats: data });
+        const data = await safeJson(res);
+        if (data) {
+          set({ stats: data });
+        }
       }
     } catch (err) {
-      console.error("Failed to load platform stats:", err);
+      console.warn("Notice: Failed to load platform stats:", err);
     }
   },
 
@@ -332,10 +362,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         },
         body: JSON.stringify({ documentType, idNumber, documentUrl }),
       });
-      const data = await res.json();
+      const data = await safeJson(res);
 
       if (!res.ok) {
-        set({ error: data.error || "Erreur de soumission KYC." });
+        set({ error: data?.error || "Erreur de soumission KYC." });
         return false;
       }
 
@@ -344,14 +374,100 @@ export const useAppStore = create<AppState>((set, get) => ({
         headers: { Authorization: `Bearer ${token}` },
       });
       if (userRes.ok) {
-        const userData = await userRes.json();
-        set({ user: userData.user });
+        const userData = await safeJson(userRes);
+        if (userData?.user) {
+          set({ user: userData.user });
+        }
       }
 
-      set({ successMessage: data.message, error: null });
+      set({ successMessage: data?.message || "KYC soumis avec succès !", error: null });
       return true;
     } catch (err) {
       set({ error: "Erreur réseau lors de la soumission du KYC." });
+      return false;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  updateUserProfile: async (data) => {
+    const token = get().token;
+    if (!token) return false;
+
+    set({ isLoading: true, error: null });
+    try {
+      const res = await fetch(`${API_BASE}/auth/profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(data)
+      });
+      const result = await safeJson(res);
+      if (!res.ok) {
+        set({ error: result?.error || "Erreur lors de la mise à jour du profil.", isLoading: false });
+        return false;
+      }
+      const currentUser = get().user;
+      if (currentUser && result?.user) {
+        const updatedUser = { ...currentUser, ...result.user };
+        set({ user: updatedUser, successMessage: "Profil mis à jour avec succès !", isLoading: false });
+        firestoreSync.saveDocument("users", updatedUser.id, updatedUser);
+      }
+      return true;
+    } catch (err) {
+      set({ error: "Erreur réseau lors de la mise à jour du profil.", isLoading: false });
+      return false;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  activateWorkspaceAccount: async (workspace) => {
+    const token = get().token;
+    if (!token) {
+      set({ error: "Veuillez vous connecter pour activer cet espace." });
+      return false;
+    }
+
+    set({ isLoading: true, error: null });
+    try {
+      const res = await fetch(`${API_BASE}/user/workspace-account`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ workspace })
+      });
+      const result = await safeJson(res);
+      if (!res.ok) {
+        set({ error: result?.error || "Impossible d'activer cet espace pour le moment.", isLoading: false });
+        return false;
+      }
+
+      if (result?.user) {
+        set({
+          user: result.user,
+          successMessage: result.message || `Espace activé avec succès !`,
+          isLoading: false
+        });
+        firestoreSync.saveDocument("users", result.user.id, result.user);
+      }
+
+      // Fetch corresponding workspace data if appropriate
+      if (workspace === "VENDOR") {
+        await get().fetchVendorProducts();
+        await get().fetchVendorOrders();
+      } else if (workspace === "INVESTOR") {
+        await get().fetchInvestments();
+        await get().fetchInvestmentProjects();
+      }
+
+      return true;
+    } catch (err) {
+      set({ error: "Erreur réseau lors de l'activation de votre espace.", isLoading: false });
       return false;
     } finally {
       set({ isLoading: false });
@@ -367,11 +483,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        const data = await res.json();
-        set({ pendingKycs: data });
+        const data = await safeJson(res);
+        if (Array.isArray(data)) {
+          set({ pendingKycs: data });
+        }
       }
     } catch (err) {
-      console.error("Error fetching pending KYCs:", err);
+      console.warn("Notice: Error fetching pending KYCs:", err);
     }
   },
 
@@ -384,11 +502,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        const data = await res.json();
-        set({ allUsers: data });
+        const data = await safeJson(res);
+        if (Array.isArray(data)) {
+          set({ allUsers: data });
+        }
       }
     } catch (err) {
-      console.error("Error fetching admin users:", err);
+      console.warn("Notice: Error fetching admin users:", err);
     }
   },
 
@@ -406,14 +526,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         },
         body: JSON.stringify({ kycId, status, rejectionReason }),
       });
-      const data = await res.json();
+      const data = await safeJson(res);
 
       if (!res.ok) {
-        set({ error: data.error || "Erreur lors de l'validation du KYC." });
+        set({ error: data?.error || "Erreur lors de l'validation du KYC." });
         return false;
       }
 
-      set({ successMessage: data.message, error: null });
+      set({ successMessage: data?.message || "KYC validé avec succès !", error: null });
       
       // Refresh pending lists
       await get().fetchPendingKycs();
@@ -430,26 +550,41 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const res = await fetch(`${API_BASE}/products`);
       if (res.ok) {
-        const data = await res.json();
-        const parsed = data.map((p: any) => {
-          let imgs = p.images;
-          if (typeof imgs === "string") {
-            try { imgs = JSON.parse(imgs); } catch (e) { imgs = [p.image].filter(Boolean); }
-          }
-          if (!Array.isArray(imgs) || imgs.length === 0) {
-            imgs = [p.image].filter(Boolean);
-          }
-          return { ...p, images: imgs };
-        });
-        set({ products: parsed });
+        const data = await safeJson(res);
+        if (Array.isArray(data) && data.length > 0) {
+          const parsed = data.map((p: any) => {
+            let imgs = p.images;
+            if (typeof imgs === "string") {
+              try { imgs = JSON.parse(imgs); } catch (e) { imgs = [p.image].filter(Boolean); }
+            }
+            if (!Array.isArray(imgs) || imgs.length === 0) {
+              imgs = [p.image].filter(Boolean);
+            }
+            let v = p.variants;
+            if (typeof v === "string") {
+              try { v = JSON.parse(v); } catch (e) { v = null; }
+            }
+            return { ...p, images: imgs, variants: v };
+          });
+          set({ products: parsed });
 
-        // Save each product to Firestore for cloud persistence
-        parsed.forEach((prod: any) => {
-          firestoreSync.saveDocument("products", prod.id, prod);
-        });
+          // Save each product to Firestore for cloud persistence
+          parsed.forEach((prod: any) => {
+            firestoreSync.saveDocument("products", prod.id, prod);
+          });
+        } else {
+          set({ products: DEFAULT_CATALOG_PRODUCTS });
+        }
+      } else {
+        if (get().products.length === 0) {
+          set({ products: DEFAULT_CATALOG_PRODUCTS });
+        }
       }
     } catch (err) {
-      console.error("Error fetching products:", err);
+      console.warn("Notice: Error fetching products:", err);
+      if (get().products.length === 0) {
+        set({ products: DEFAULT_CATALOG_PRODUCTS });
+      }
     }
   },
 
@@ -462,21 +597,27 @@ export const useAppStore = create<AppState>((set, get) => ({
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
-        const data = await res.json();
-        const parsed = data.map((p: any) => {
-          let imgs = p.images;
-          if (typeof imgs === "string") {
-            try { imgs = JSON.parse(imgs); } catch (e) { imgs = [p.image].filter(Boolean); }
-          }
-          if (!Array.isArray(imgs) || imgs.length === 0) {
-            imgs = [p.image].filter(Boolean);
-          }
-          return { ...p, images: imgs };
-        });
-        set({ vendorProducts: parsed });
+        const data = await safeJson(res);
+        if (Array.isArray(data)) {
+          const parsed = data.map((p: any) => {
+            let imgs = p.images;
+            if (typeof imgs === "string") {
+              try { imgs = JSON.parse(imgs); } catch (e) { imgs = [p.image].filter(Boolean); }
+            }
+            if (!Array.isArray(imgs) || imgs.length === 0) {
+              imgs = [p.image].filter(Boolean);
+            }
+            let v = p.variants;
+            if (typeof v === "string") {
+              try { v = JSON.parse(v); } catch (e) { v = null; }
+            }
+            return { ...p, images: imgs, variants: v };
+          });
+          set({ vendorProducts: parsed });
+        }
       }
     } catch (err) {
-      console.error("Error fetching vendor products:", err);
+      console.warn("Notice: Error fetching vendor products:", err);
     }
   },
 
@@ -572,11 +713,25 @@ export const useAppStore = create<AppState>((set, get) => ({
       const data = await res.json();
 
       if (!res.ok) {
-        set({ error: data.error || "Erreur lors de la suppression." });
+        set({ error: data.error || "Erreur lors de la suppression de l'article." });
         return false;
       }
 
-      set({ successMessage: data.message, error: null });
+      set({ successMessage: data.message || "Article supprimé avec succès.", error: null });
+
+      // Clean up from Firestore
+      try {
+        firestoreSync.deleteDocument("products", id);
+      } catch (fsErr) {
+        console.warn("Firestore product deletion notice:", fsErr);
+      }
+
+      // Optimistically remove from state so the UI reacts immediately
+      set((state) => ({
+        products: state.products.filter((p) => p.id !== id),
+        vendorProducts: state.vendorProducts.filter((p) => p.id !== id)
+      }));
+
       await get().fetchVendorProducts();
       await get().fetchProducts();
       await get().fetchStats();
@@ -802,6 +957,116 @@ export const useAppStore = create<AppState>((set, get) => ({
       return true;
     } catch (err) {
       set({ error: "Erreur réseau lors de l'investissement." });
+      return false;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  fetchInvestmentProjects: async (status, search) => {
+    try {
+      const params = new URLSearchParams();
+      if (status) params.append("status", status);
+      if (search) params.append("search", search);
+      const url = `${API_BASE}/investment-projects${params.toString() ? `?${params.toString()}` : ""}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        set({ investmentProjects: data });
+      }
+    } catch (err) {
+      console.error("Error fetching investment projects:", err);
+    }
+  },
+
+  createInvestmentProject: async (projectData) => {
+    const token = get().token;
+    if (!token) return false;
+
+    set({ isLoading: true, error: null, successMessage: null });
+    try {
+      const res = await fetch(`${API_BASE}/investment-projects`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(projectData)
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        set({ error: data.error || "Erreur lors de la création du projet d'investissement." });
+        return false;
+      }
+
+      set({ successMessage: data.message, error: null });
+      await get().fetchInvestmentProjects();
+      return true;
+    } catch (err) {
+      set({ error: "Erreur réseau lors de la création du projet d'investissement." });
+      return false;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  updateInvestmentProject: async (id, projectData) => {
+    const token = get().token;
+    if (!token) return false;
+
+    set({ isLoading: true, error: null, successMessage: null });
+    try {
+      const res = await fetch(`${API_BASE}/investment-projects/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(projectData)
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        set({ error: data.error || "Erreur lors de la modification du projet d'investissement." });
+        return false;
+      }
+
+      set({ successMessage: data.message, error: null });
+      await get().fetchInvestmentProjects();
+      return true;
+    } catch (err) {
+      set({ error: "Erreur réseau lors de la modification du projet d'investissement." });
+      return false;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  deleteInvestmentProject: async (id) => {
+    const token = get().token;
+    if (!token) return false;
+
+    set({ isLoading: true, error: null, successMessage: null });
+    try {
+      const res = await fetch(`${API_BASE}/investment-projects/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        set({ error: data.error || "Erreur lors de la suppression du projet d'investissement." });
+        return false;
+      }
+
+      set({ successMessage: data.message, error: null });
+      await get().fetchInvestmentProjects();
+      return true;
+    } catch (err) {
+      set({ error: "Erreur réseau lors de la suppression du projet d'investissement." });
       return false;
     } finally {
       set({ isLoading: false });

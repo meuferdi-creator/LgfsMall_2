@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Investment } from "../types";
 import InvestorAnalyticsCharts from "./InvestorAnalyticsCharts";
+import { useTranslation } from "../hooks/useTranslation";
 
 interface InvestorPortalProps {
   investments: Investment[];
@@ -32,6 +33,7 @@ export default function InvestorPortal({
   formatCurrency,
   isLoading
 }: InvestorPortalProps) {
+  const { t } = useTranslation();
   const [investorTab, setInvestorTab] = useState<"portfolio" | "projects" | "fund" | "ledger">("portfolio");
   const [investAmount, setInvestAmount] = useState("750000");
   const [investCampaign, setInvestCampaign] = useState("agriculture");
@@ -164,7 +166,7 @@ export default function InvestorPortal({
           }`}
         >
           <TrendingUp className="w-4 h-4" />
-          <span>Mon Portefeuille</span>
+          <span>{t.investorPortal}</span>
         </button>
 
         <button

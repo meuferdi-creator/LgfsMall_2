@@ -35,14 +35,15 @@ const REGIONS = [
 
 const CATEGORIES = [
   "Tous",
-  "Maison & Décoration",
-  "Maison & Décoration / Rideaux",
-  "Maison & Décoration / Tapis",
-  "Beauté & Soins / Visage",
-  "Mode & Textiles",
-  "Cosmétiques & Beauté",
-  "Alimentation",
-  "Électronique"
+  "Maison & Cuisine",
+  "Beauté & Santé",
+  "Électronique",
+  "Téléphones",
+  "Mode Homme",
+  "Mode Femme",
+  "Ordinateurs",
+  "Épicerie",
+  "Artisanat Togolais"
 ];
 
 export default function FacetedSearchPanel({
@@ -100,11 +101,11 @@ export default function FacetedSearchPanel({
             onChange={(e) => onFilterChange({ sortBy: e.target.value as any })}
             className="bg-emerald-50/80 border border-emerald-100 px-4 py-3 rounded-2xl text-xs font-bold text-emerald-950 focus:outline-none cursor-pointer flex-1 md:flex-initial font-mono"
           >
-            <option value="featured">✨ Recommandations</option>
-            <option value="newest">🔥 Nouveautés</option>
-            <option value="bestseller">🏆 Meilleures Ventes</option>
-            <option value="price_asc">📈 Prix Croissant</option>
-            <option value="price_desc">📉 Prix Décroissant</option>
+            <option value="featured">✦ Recommandations</option>
+            <option value="newest">✧ Nouveautés</option>
+            <option value="bestseller">◈ Meilleures Ventes</option>
+            <option value="price_asc">↑ Prix Croissant</option>
+            <option value="price_desc">↓ Prix Décroissant</option>
           </select>
 
           {/* Toggle Faceted Drawer button for mobile/desktop */}
