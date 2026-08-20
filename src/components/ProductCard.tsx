@@ -282,34 +282,99 @@ export default function ProductCard({
             </div>
           )}
 
-          {/* Pricing Stats Grid */}
-          <div className="p-3.5 bg-emerald-50/50 dark:bg-emerald-900/50 rounded-2xl border border-emerald-100/50 dark:border-emerald-800/60 grid grid-cols-2 gap-2 text-xs">
-            <div>
-              <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase font-mono block">Prix de Détail :</span>
-              <span className={`font-extrabold text-sm block ${isWholesaleActive ? "line-through text-slate-400 dark:text-slate-500" : "text-emerald-950 dark:text-white"}`}>
-                {formatCurrency(basePrice)}
-              </span>
-            </div>
-            {hasWholesale ? (
-              <div>
-                <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 uppercase font-mono block">Prix de Gros :</span>
-                <span className={`font-extrabold text-sm block ${isWholesaleActive ? "text-amber-600 dark:text-amber-400 font-black text-base" : "text-slate-500 dark:text-slate-400"}`}>
-                  {formatCurrency(wholesalePrice)}
+          {/* Pricing Stats - Spacious, Clear & Non-Truncated */}
+          <div className="p-3.5 bg-emerald-50/80 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200/80 dark:border-emerald-800/70 shadow-2xs space-y-2.5">
+            {/* 1. Prix à l'unité */}
+            <div className="bg-white/95 dark:bg-emerald-900/60 p-2.5 sm:p-3 rounded-xl border border-emerald-100 dark:border-emerald-800/60 flex items-center justify-between gap-3 shadow-2xs">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-wider font-mono">
+                  Prix à l'unité
                 </span>
-                <span className="text-[8px] text-amber-600 dark:text-amber-400 block font-bold uppercase mt-0.5">Dès {wholesaleMin} pièces</span>
+                <span className="text-[9px] text-slate-400 dark:text-slate-400 font-medium">
+                  Tarif au détail
+                </span>
+              </div>
+              <div className="text-right">
+                <span
+                  className={`font-mono font-black text-sm sm:text-base whitespace-nowrap block ${
+                    isWholesaleActive
+                      ? "line-through text-slate-400 dark:text-slate-500 text-xs"
+                      : "text-emerald-950 dark:text-white"
+                  }`}
+                >
+                  {formatCurrency(basePrice)}
+                </span>
+              </div>
+            </div>
+
+            {/* 2. Prix de gros ou info boutique */}
+            {hasWholesale ? (
+              <div
+                className={`p-2.5 sm:p-3 rounded-xl border transition-all shadow-2xs flex items-center justify-between gap-3 ${
+                  isWholesaleActive
+                    ? "bg-amber-500 text-white border-amber-600 shadow-xs"
+                    : "bg-amber-50/95 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800/70 text-amber-900 dark:text-amber-100"
+                }`}
+              >
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span
+                      className={`text-[10px] font-black uppercase tracking-wider font-mono ${
+                        isWholesaleActive ? "text-amber-100" : "text-amber-800 dark:text-amber-300"
+                      }`}
+                    >
+                      Prix de gros
+                    </span>
+                    <span
+                      className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded leading-none font-mono ${
+                        isWholesaleActive
+                          ? "bg-amber-700 text-white"
+                          : "bg-amber-100 dark:bg-amber-900/90 text-amber-900 dark:text-amber-200 border border-amber-300/80 dark:border-amber-700/60"
+                      }`}
+                    >
+                      Dès {wholesaleMin} pcs
+                    </span>
+                  </div>
+                  <span
+                    className={`text-[9px] font-bold mt-0.5 ${
+                      isWholesaleActive ? "text-amber-100" : "text-amber-700 dark:text-amber-400"
+                    }`}
+                  >
+                    -{savingsPercent}% par article
+                  </span>
+                </div>
+                <div className="text-right shrink-0">
+                  <span
+                    className={`font-mono font-black text-sm sm:text-base whitespace-nowrap block ${
+                      isWholesaleActive ? "text-white" : "text-amber-700 dark:text-amber-300"
+                    }`}
+                  >
+                    {formatCurrency(wholesalePrice)}
+                  </span>
+                </div>
               </div>
             ) : (
-              <div>
-                <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase font-mono block">Boutique Vendeur :</span>
+              <div className="bg-white/95 dark:bg-emerald-900/60 p-2.5 sm:p-3 rounded-xl border border-emerald-100 dark:border-emerald-800/60 flex items-center justify-between gap-3 shadow-2xs">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider font-mono">
+                    Boutique
+                  </span>
+                  <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                    Vendeur vérifié
+                  </span>
+                </div>
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     if (onOpenStore && product.vendorId) {
-                      onOpenStore(product.vendorId, vendorProfile?.shopName || product.vendor?.name || "Boutique d'Assigamé");
+                      onOpenStore(
+                        product.vendorId,
+                        vendorProfile?.shopName || product.vendor?.name || "Boutique d'Assigamé"
+                      );
                     }
                   }}
-                  className="font-bold text-[10px] text-emerald-700 hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-100 underline truncate block mt-0.5 text-left cursor-pointer"
+                  className="font-bold text-xs text-emerald-700 hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-100 underline truncate max-w-[130px] text-right cursor-pointer"
                 >
                   {vendorProfile?.shopName || product.vendor?.name || "Boutique d'Assigamé"}
                 </button>

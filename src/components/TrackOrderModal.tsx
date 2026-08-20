@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Search, Package, Truck, CheckCircle2, ShieldCheck, Phone } from "lucide-react";
 import { Order } from "../types";
+import { useTranslation } from "../hooks/useTranslation";
 
 interface TrackOrderModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ export default function TrackOrderModal({
   buyerOrders = [],
   formatCurrency
 }: TrackOrderModalProps) {
+  const { t } = useTranslation();
   const [searchRef, setSearchRef] = useState("");
   const [searchedOrder, setSearchedOrder] = useState<any | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
@@ -90,17 +92,17 @@ export default function TrackOrderModal({
             <Truck className="w-6 h-6" />
           </div>
           <DialogTitle className="text-xl font-black font-display text-emerald-950 dark:text-white">
-            Suivi de Commande & Séquestre LGF
+            {t.trackPackage} & {t.escrowProtected}
           </DialogTitle>
           <DialogDescription className="text-xs text-slate-500 dark:text-emerald-300">
-            Suivez l'état d'expédition de votre colis et le statut de garantie de votre paiement en FCFA.
+            {t.fastDelivery} • {t.securePayments}
           </DialogDescription>
         </DialogHeader>
 
         {/* Search Bar Input */}
         <form onSubmit={handleSearch} className="space-y-3 my-4">
           <label className="text-[10px] uppercase font-bold tracking-wider text-slate-700 dark:text-emerald-300 block font-mono">
-            Entrez votre N° de commande ou Téléphone Mobile
+            {t.orderId} / {t.phone}
           </label>
           <div className="relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -115,7 +117,7 @@ export default function TrackOrderModal({
               type="submit"
               className="absolute right-2 top-1/2 -translate-y-1/2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-3 py-1.5 rounded-xl text-xs shadow-xs transition-all cursor-pointer"
             >
-              Suivre
+              {t.track}
             </button>
           </div>
         </form>
@@ -124,7 +126,7 @@ export default function TrackOrderModal({
         {buyerOrders.length > 0 && !hasSearched && (
           <div className="space-y-2 mb-4">
             <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 font-mono block">
-              Vos commandes récentes :
+              {t.myOrders} :
             </span>
             <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
               {buyerOrders.map((ord) => (

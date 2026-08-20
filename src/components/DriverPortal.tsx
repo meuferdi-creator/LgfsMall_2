@@ -4,6 +4,7 @@ import { Order } from "../types";
 import { calculateRoute } from "../lib/maps";
 import { firestoreSync } from "../lib/firebase";
 import NotificationBanner from "./NotificationBanner";
+import { useTranslation } from "../hooks/useTranslation";
 
 interface DriverPortalProps {
   user: any;
@@ -12,6 +13,7 @@ interface DriverPortalProps {
 }
 
 export default function DriverPortal({ user, formatCurrency, isLoading }: DriverPortalProps) {
+  const { t } = useTranslation();
   const [dispatchedOrders, setDispatchedOrders] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<"available" | "my-deliveries" | "earnings">("available");
   const [otps, setOtps] = useState<{ [orderId: string]: string }>({});
@@ -139,13 +141,13 @@ export default function DriverPortal({ user, formatCurrency, isLoading }: Driver
       <div className="bg-emerald-900 rounded-3xl p-6 text-white border border-emerald-800 shadow-xl relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-2 z-10">
           <span className="px-2.5 py-1 text-[9px] font-extrabold bg-emerald-800 border border-emerald-700 text-yellow-400 rounded-full uppercase tracking-wider font-mono">
-            Logistique & Transporteur Agréé LGF
+            {t.certifiedMerchant} • {t.driverPortal}
           </span>
           <h2 className="text-xl font-black font-display tracking-tight">
-            Espace Livreur • {user.name}
+            {t.driverPortal} • {user.name}
           </h2>
           <p className="text-xs text-emerald-300 leading-normal max-w-lg">
-            Livrez des marchandises de manière sécurisée de Grand Marché d'Assigamé, Hedzranawoé, ou Agoè, et validez par code secret Mobile Money client.
+            {t.fastDelivery} • {t.escrowProtected}
           </p>
         </div>
         
@@ -154,7 +156,7 @@ export default function DriverPortal({ user, formatCurrency, isLoading }: Driver
             💰
           </div>
           <div>
-            <span className="text-[9px] uppercase font-bold text-emerald-400 block">Mes Gains Réels</span>
+            <span className="text-[9px] uppercase font-bold text-emerald-400 block">{t.totalAmount}</span>
             <span className="text-sm font-black text-white block">
               {formatCurrency(totalEarnings)}
             </span>
@@ -173,7 +175,7 @@ export default function DriverPortal({ user, formatCurrency, isLoading }: Driver
           }`}
         >
           <Truck className="w-4 h-4" />
-          <span>Courses Disponibles ({availableDeliveries.length})</span>
+          <span>{t.trackPackage} ({availableDeliveries.length})</span>
         </button>
         <button
           onClick={() => setActiveTab("my-deliveries")}
@@ -184,7 +186,7 @@ export default function DriverPortal({ user, formatCurrency, isLoading }: Driver
           }`}
         >
           <MapPin className="w-4 h-4" />
-          <span>Mes Livraisons ({activeDeliveries.length})</span>
+          <span>{t.myOrders} ({activeDeliveries.length})</span>
         </button>
         <button
           onClick={() => setActiveTab("earnings")}
@@ -195,7 +197,7 @@ export default function DriverPortal({ user, formatCurrency, isLoading }: Driver
           }`}
         >
           <Wallet className="w-4 h-4" />
-          <span>Historique & Tarifs</span>
+          <span>{t.escrowWallet}</span>
         </button>
       </div>
 

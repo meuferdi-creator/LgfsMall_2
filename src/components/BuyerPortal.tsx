@@ -14,6 +14,7 @@ import WishlistSection from "./WishlistSection";
 import HomePageSections from "./HomePageSections";
 import { motion, AnimatePresence } from "framer-motion";
 import { isCategoryMatch } from "../utils/categoryMatcher";
+import { formatUtcDate } from "../lib/utils";
 
 interface BuyerPortalProps {
   products: Product[];
@@ -576,7 +577,7 @@ export default function BuyerPortal({
                     <div>
                       <h4 className="text-xs font-extrabold text-emerald-950">Commande #{ord.id.slice(0, 8)}</h4>
                       <span className="text-[10px] text-emerald-500 font-semibold uppercase tracking-wider block font-mono">
-                        Date : {new Date(ord.createdAt).toLocaleDateString()} • Paiement : {ord.paymentMethod || "Mobile Money"}
+                        Date : {formatUtcDate(ord.createdAt)} • Paiement : {ord.paymentMethod || "Mobile Money"}
                       </span>
                     </div>
                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase border ${

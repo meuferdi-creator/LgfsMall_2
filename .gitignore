@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# SQLite & local DB artifacts
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+prisma/*.db*

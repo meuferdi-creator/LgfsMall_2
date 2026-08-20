@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Store, MapPin, Phone, Mail, X, ShoppingBag, ShieldCheck, Star, Search, ArrowLeft } from "lucide-react";
 import { Product } from "../types";
 import ProductCard from "./ProductCard";
+import { useTranslation } from "../hooks/useTranslation";
 
 interface StoreModalProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ export default function StoreModal({
   onBuyProduct,
   onOpenDetail
 }: StoreModalProps) {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
   const [storeInfo, setStoreInfo] = useState<{
     shopName?: string;
@@ -96,13 +98,13 @@ export default function StoreModal({
               className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-all cursor-pointer shadow-xs"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>← Retour à l'accueil</span>
+              <span>← {t.back}</span>
             </button>
 
             <button
               onClick={onClose}
               className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors cursor-pointer"
-              aria-label="Fermer la boutique"
+              aria-label={t.close}
             >
               <X className="w-5 h-5" />
             </button>
@@ -118,7 +120,7 @@ export default function StoreModal({
                 <h2 className="text-xl sm:text-2xl font-extrabold font-display">{displayName}</h2>
                 <span className="bg-amber-400 text-emerald-950 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center space-x-1 uppercase font-mono">
                   <ShieldCheck className="w-3 h-3" />
-                  <span>Vérifiée LGF</span>
+                  <span>{t.certifiedMerchant}</span>
                 </span>
               </div>
 
@@ -139,7 +141,7 @@ export default function StoreModal({
                 )}
                 <span className="flex items-center">
                   <ShoppingBag className="w-3.5 h-3.5 mr-1 text-amber-300" />
-                  <span>{storeProducts.length} articles en stock</span>
+                  <span>{storeProducts.length} {t.productsCount}</span>
                 </span>
               </div>
             </div>
@@ -156,12 +158,12 @@ export default function StoreModal({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={`Rechercher un article dans ${displayName}...`}
+                placeholder={`${t.searchPlaceholder} ${displayName}...`}
                 className="w-full bg-emerald-50/50 dark:bg-emerald-900/40 border border-emerald-100 dark:border-emerald-800 pl-9 pr-4 py-2 rounded-xl text-xs text-emerald-950 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
               />
             </div>
             <span className="text-xs text-slate-500 dark:text-emerald-300 font-mono">
-              {filteredProducts.length} résultat(s)
+              {filteredProducts.length} {t.productsFound}
             </span>
           </div>
 

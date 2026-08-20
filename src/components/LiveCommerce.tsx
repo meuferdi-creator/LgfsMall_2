@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Tv, Users, Heart, Send, ShoppingBag, X, Star, Shield, ArrowRight } from "lucide-react";
 import { Product } from "../types";
 import { getOptimizedImageUrl } from "../utils/imageOptimizer";
+import { safeJson } from "../lib/utils";
 
 interface LiveCommerceProps {
   user: any;
@@ -45,20 +46,22 @@ export default function LiveCommerce({ user, products, formatCurrency, onBuyProd
     try {
       const res = await fetch("/api/livestreams");
       if (res.ok) {
-        const data = await res.json();
-        setStreams(data);
-        
-        // If we are vendor and there is an active stream, set it
-        if (user && user.role === "VENDOR") {
-          const myLive = data.find((s: any) => s.vendorId === user.id);
-          if (myLive) {
-            setActiveStream(myLive);
-            setIsLive(true);
+        const data = await safeJson(res);
+        if (Array.isArray(data)) {
+          setStreams(data);
+          
+          // If we are vendor and there is an active stream, set it
+          if (user && user.role === "VENDOR") {
+            const myLive = data.find((s: any) => s.vendorId === user.id);
+            if (myLive) {
+              setActiveStream(myLive);
+              setIsLive(true);
+            }
           }
         }
       }
     } catch (e) {
-      console.error(e);
+      console.warn("Notice: fetchStreams failed", e);
     }
   };
 
@@ -76,17 +79,19 @@ export default function LiveCommerce({ user, products, formatCurrency, onBuyProd
       try {
         const res = await fetch(`/api/livestreams/${activeStream.id}/messages`);
         if (res.ok) {
-          const data = await res.json();
-          const mapped = data.map((msg: any) => ({
-            id: msg.id,
-            senderName: msg.sender?.name || "Anonyme",
-            senderRole: msg.sender?.role || "BUYER",
-            content: msg.content
-          }));
-          setChatMessages(mapped);
+          const data = await safeJson(res);
+          if (Array.isArray(data)) {
+            const mapped = data.map((msg: any) => ({
+              id: msg.id,
+              senderName: msg.sender?.name || "Anonyme",
+              senderRole: msg.sender?.role || "BUYER",
+              content: msg.content
+            }));
+            setChatMessages(mapped);
+          }
         }
       } catch (e) {
-        console.error(e);
+        console.warn("Notice: fetchChat failed", e);
       }
     };
 

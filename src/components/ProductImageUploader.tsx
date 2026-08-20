@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import { Upload, Camera, Image as ImageIcon, Trash2, Star, CheckCircle, AlertCircle, ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
+import { useTranslation } from "../hooks/useTranslation";
 
 interface ProductImageUploaderProps {
   images: string[];
@@ -12,6 +13,7 @@ export default function ProductImageUploader({
   onChange,
   maxImages = 10
 }: ProductImageUploaderProps) {
+  const { t } = useTranslation();
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -20,8 +22,25 @@ export default function ProductImageUploader({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-  const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+  const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB
+  const ALLOWED_MIME_TYPES = [
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+    "image/avif"
+  ];
+  const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".avif"];
+
+  const isFileAllowed = (file: File): boolean => {
+    if (file.type && ALLOWED_MIME_TYPES.includes(file.type.toLowerCase())) {
+      return true;
+    }
+    const name = file.name.toLowerCase();
+    return ALLOWED_EXTENSIONS.some((ext) => name.endsWith(ext));
+  };
 
   // Helper function to compress and optimize image to WebP/JPEG Data URI
   const compressImage = (file: File): Promise<string> => {
@@ -62,7 +81,14 @@ export default function ProductImageUploader({
           const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.82);
           resolve(compressedDataUrl);
         };
-        img.onerror = (err) => reject(err);
+        img.onerror = () => {
+          // If Image constructor fails (e.g. raw HEIC on unsupported browser), fallback to data URL directly
+          if (event.target?.result) {
+            resolve(event.target.result as string);
+          } else {
+            reject(new Error("Format non convertible"));
+          }
+        };
         img.src = event.target?.result as string;
       };
       reader.onerror = (err) => reject(err);
@@ -83,12 +109,12 @@ export default function ProductImageUploader({
 
     // Validate files
     for (const file of filesArray) {
-      if (!ALLOWED_TYPES.includes(file.type)) {
-        setErrorMessage(`Format non supporté: "${file.name}". Utilisez uniquement JPG, JPEG, PNG ou WEBP.`);
+      if (!isFileAllowed(file)) {
+        setErrorMessage(`Format non supporté: "${file.name}". Utilisez JPG, PNG, WEBP ou HEIC.`);
         return;
       }
       if (file.size > MAX_FILE_SIZE) {
-        setErrorMessage(`Fichier trop volumineux: "${file.name}". La taille maximale est de 10 Mo par photo.`);
+        setErrorMessage(`Fichier trop volumineux: "${file.name}". La taille maximale est de 15 Mo par photo.`);
         return;
       }
     }
@@ -114,7 +140,7 @@ export default function ProductImageUploader({
       }, 400);
     } catch (err) {
       console.error("Error processing product images:", err);
-      setErrorMessage("Erreur lors de l'optimisation de l'image. Veuillez réessayer.");
+      setErrorMessage("Erreur lors du traitement de l'image. Veuillez réessayer avec un format JPG ou PNG standard.");
       setIsProcessing(false);
       setUploadProgress(0);
     }
@@ -181,7 +207,7 @@ export default function ProductImageUploader({
         type="file"
         ref={fileInputRef}
         multiple
-        accept="image/png, image/jpeg, image/jpg, image/webp"
+        accept="image/*, .heic, .heif, .webp, .jpg, .jpeg, .png, .avif"
         className="hidden"
         onChange={(e) => {
           if (e.target.files) handleFiles(e.target.files);

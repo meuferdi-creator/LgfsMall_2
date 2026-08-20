@@ -219,31 +219,31 @@ export default function GeminiAssistantWidget() {
     <>
       {/* Floating Trigger Button */}
       <div 
-        className={`fixed ${cartCount > 0 ? "bottom-24 sm:bottom-6" : "bottom-6"} right-6 z-40 flex flex-col items-end pointer-events-auto transition-all duration-300`}
+        className="fixed bottom-20 right-3.5 sm:bottom-6 sm:right-6 z-40 flex flex-col items-end pointer-events-auto transition-all duration-300"
         id="lgf-ai-assistant-trigger"
       >
         {!isOpen && (
           <button
             onClick={() => setIsOpen(true)}
-            className="group relative bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white p-3.5 sm:p-4 rounded-full shadow-2xl shadow-emerald-600/40 ring-4 ring-emerald-500/20 active:scale-95 transition-all duration-300 flex items-center justify-center cursor-pointer"
+            className="group relative bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white w-11 h-11 sm:w-12 sm:h-12 rounded-full shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-400/30 hover:ring-4 active:scale-95 transition-all duration-300 flex items-center justify-center cursor-pointer"
             title="Besoin d'aide ? Discutez avec notre IA !"
             aria-label="Ouvrir l'assistant virtuel AI LGF Mall"
           >
             {/* Sparkle icon with subtle glow pulse */}
             <div className="relative flex items-center justify-center">
-              <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 animate-pulse text-amber-300" />
-              <Bot className="w-4 h-4 text-white absolute -bottom-1 -right-1" />
+              <Sparkles className="w-5 h-5 sm:w-5.5 sm:h-5.5 animate-pulse text-amber-300" />
+              <Bot className="w-3 h-3 text-white absolute -bottom-1 -right-1" />
             </div>
 
             {/* Unread badge indicator */}
             {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-amber-400 text-slate-950 font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center shadow-md animate-bounce">
+              <span className="absolute -top-1 -right-1 bg-amber-400 text-slate-950 font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center shadow-md animate-bounce">
                 {unreadCount}
               </span>
             )}
 
             {/* Desktop Hover Tooltip */}
-            <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 hidden md:group-hover:flex items-center space-x-2 bg-slate-900/90 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xl whitespace-nowrap backdrop-blur-md border border-slate-700/80 animate-in fade-in slide-in-from-right-2 duration-200">
+            <div className="absolute right-full mr-2.5 top-1/2 -translate-y-1/2 hidden md:group-hover:flex items-center space-x-2 bg-slate-900/90 text-white text-xs font-bold px-2.5 py-1 rounded-xl shadow-xl whitespace-nowrap backdrop-blur-md border border-slate-700/80 animate-in fade-in slide-in-from-right-2 duration-200">
               <span>Besoin d'aide ? Discutez avec notre IA !</span>
             </div>
           </button>
@@ -254,7 +254,7 @@ export default function GeminiAssistantWidget() {
       {isOpen && (
         <div 
           ref={widgetRef}
-          className={`fixed inset-x-3 ${cartCount > 0 ? "bottom-24 sm:bottom-6" : "bottom-20 sm:bottom-6"} sm:right-6 sm:left-auto sm:w-[410px] h-[580px] max-h-[82vh] rounded-3xl shadow-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 flex flex-col z-40 overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-300`}
+          className="fixed inset-x-3 bottom-20 sm:bottom-6 sm:right-6 sm:left-auto sm:w-[380px] max-w-[calc(100vw-24px)] h-[490px] max-h-[72vh] rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 flex flex-col z-40 overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-300"
           id="lgf-ai-assistant-drawer"
         >
           {/* Header */}

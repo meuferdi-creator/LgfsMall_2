@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import SupportTicketModal from "./SupportTicketModal";
 import { User as UserType } from "../types";
+import { useTranslation } from "../hooks/useTranslation";
 
 interface InfoPageProps {
   slug: string;
@@ -46,6 +47,7 @@ export default function InfoPages({
   onOpenVendorPortal,
   onOpenTrackOrders
 }: InfoPageProps) {
+  const { t } = useTranslation();
   const [isTicketOpen, setIsTicketOpen] = useState(false);
   const [ticketSubject, setTicketSubject] = useState("Question générale");
 
@@ -63,7 +65,7 @@ export default function InfoPages({
           className="inline-flex items-center space-x-2 text-xs font-extrabold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 transition-colors cursor-pointer group"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-          <span>Retour à l'accueil LGF's Mall</span>
+          <span>← {t.back}</span>
         </button>
 
         <div className="flex items-center space-x-2 text-xs text-slate-500 font-mono">

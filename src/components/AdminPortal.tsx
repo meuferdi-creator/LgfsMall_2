@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   ShieldCheck, 
   Users, 
@@ -26,10 +26,30 @@ import {
   Plus,
   Edit,
   Trash2,
-  Check
+  Check,
+  Activity,
+  RefreshCw,
+  Download,
+  Filter,
+  Terminal,
+  ShieldAlert
 } from "lucide-react";
 import { User as UserType, Kyc, UserRole, InvestmentProject, Product } from "../types";
+import { formatAccountCreationDate, formatUtcDate } from "../lib/utils";
 import AdminInvestmentProjects from "./AdminInvestmentProjects";
+import { useTranslation } from "../hooks/useTranslation";
+
+interface ActivityLogItem {
+  id: string;
+  action: string;
+  resource: string;
+  details?: string | null;
+  ipAddress?: string | null;
+  status?: "SUCCESS" | "WARNING" | "INFO" | "ERROR";
+  createdAt: string;
+  user?: { id: string; name: string; email: string; role: string } | null;
+  admin?: { id: string; name: string; email: string; role: string } | null;
+}
 
 interface AdminPortalProps {
   allUsers: UserType[];
@@ -64,7 +84,8 @@ export default function AdminPortal({
   allProducts = [],
   fetchProducts = async () => {}
 }: AdminPortalProps) {
-  const [adminTab, setAdminTab] = useState<"users" | "kyc" | "projects" | "marketing">("users");
+  const { t } = useTranslation();
+  const [adminTab, setAdminTab] = useState<"users" | "kyc" | "projects" | "marketing" | "logs">("users");
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<"ALL" | UserRole>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUserForDetail, setSelectedUserForDetail] = useState<UserType | null>(null);
@@ -77,6 +98,36 @@ export default function AdminPortal({
   const [flashHoursInput, setFlashHoursInput] = useState("24");
   const [isUpdatingProduct, setIsUpdatingProduct] = useState(false);
   const [actionSuccessMsg, setActionSuccessMsg] = useState("");
+
+  // Activity Logs State
+  const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [logsCategoryFilter, setLogsCategoryFilter] = useState<"ALL" | "AUTH" | "KYC" | "WORKSPACE" | "SECURITY">("ALL");
+  const [logsSearchQuery, setLogsSearchQuery] = useState("");
+
+  const fetchActivityLogs = async () => {
+    setIsLoadingLogs(true);
+    try {
+      const token = localStorage.getItem("lgf_auth_token");
+      const res = await fetch("/api/admin/activity-logs", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setActivityLogs(data);
+      }
+    } catch (e) {
+      console.warn("Notice: Failed to fetch activity logs:", e);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (adminTab === "logs") {
+      fetchActivityLogs();
+    }
+  }, [adminTab]);
 
   const flashProducts = allProducts.filter(p => p.isFlashDeal);
   const featuredProducts = allProducts.filter(p => p.isFeatured);
@@ -211,7 +262,7 @@ export default function AdminPortal({
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>Utilisateurs ({allUsers.length})</span>
+            <span>{t.users || "Utilisateurs"} ({allUsers.length})</span>
           </button>
 
           <button
@@ -236,7 +287,7 @@ export default function AdminPortal({
             }`}
           >
             <TrendingUp className="w-4 h-4" />
-            <span>Investissements ({investmentProjects.length})</span>
+            <span>{t.investorPortal} ({investmentProjects.length})</span>
           </button>
 
           <button
@@ -246,7 +297,17 @@ export default function AdminPortal({
             }`}
           >
             <Flame className="w-4 h-4 text-amber-300 fill-amber-300" />
-            <span>Ventes Flash & Vedettes ({allProducts.length})</span>
+            <span>{t.flashDeals} ({allProducts.length})</span>
+          </button>
+
+          <button
+            onClick={() => setAdminTab("logs")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+              adminTab === "logs" ? "bg-emerald-600 text-white shadow-md" : "text-slate-600 hover:text-emerald-950"
+            }`}
+          >
+            <Activity className="w-4 h-4 text-emerald-300" />
+            <span>Journal d'Audit</span>
           </button>
         </div>
       </div>
@@ -477,9 +538,7 @@ export default function AdminPortal({
                     <div>
                       <span className="text-emerald-500 block text-[9px] font-bold uppercase">Création :</span>
                       <span className="font-semibold text-emerald-950">
-                        {kyc.createdAt && !isNaN(new Date(kyc.createdAt).getTime())
-                          ? new Date(kyc.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })
-                          : "Date non disponible"}
+                        {formatUtcDate(kyc.createdAt)}
                       </span>
                     </div>
                   </div>
@@ -887,6 +946,205 @@ export default function AdminPortal({
           )}
         </div>
       )}
+
+      {/* 5. ACTIVITY LOGS TAB */}
+      {adminTab === "logs" && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Header Card */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center space-x-2">
+                <Activity className="w-5 h-5 text-emerald-600" />
+                <h3 className="text-lg font-bold text-slate-900 font-display">Journal d'Activité & Audit Système</h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Traçabilité en temps réel des connexions, activations d'espaces, décisions KYC et flux de sécurité.
+              </p>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={fetchActivityLogs}
+                disabled={isLoadingLogs}
+                className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl transition-all flex items-center space-x-1.5 cursor-pointer disabled:opacity-50 border border-emerald-200 shadow-xs"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingLogs ? "animate-spin text-emerald-600" : ""}`} />
+                <span>{isLoadingLogs ? "Actualisation..." : "Actualiser le journal"}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+              <span className="text-[10px] font-bold uppercase text-slate-400 font-mono">Total Événements</span>
+              <p className="text-xl font-black text-slate-900 mt-1">{activityLogs.length}</p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+              <span className="text-[10px] font-bold uppercase text-slate-400 font-mono">Connexions</span>
+              <p className="text-xl font-black text-blue-600 mt-1">
+                {activityLogs.filter(l => l.action.includes("LOGIN")).length}
+              </p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+              <span className="text-[10px] font-bold uppercase text-slate-400 font-mono">Audits KYC</span>
+              <p className="text-xl font-black text-purple-600 mt-1">
+                {activityLogs.filter(l => l.action.includes("KYC")).length}
+              </p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs">
+              <span className="text-[10px] font-bold uppercase text-slate-400 font-mono">Espaces Activés</span>
+              <p className="text-xl font-black text-amber-600 mt-1">
+                {activityLogs.filter(l => l.action.includes("WORKSPACE") || l.action.includes("REGISTER")).length}
+              </p>
+            </div>
+          </div>
+
+          {/* Search & Category Filter */}
+          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Rechercher par action, email, nom ou IP..."
+                value={logsSearchQuery}
+                onChange={(e) => setLogsSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 md:pb-0">
+              <button
+                type="button"
+                onClick={() => setLogsCategoryFilter("ALL")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  logsCategoryFilter === "ALL" ? "bg-emerald-600 text-white shadow-xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                Tous ({activityLogs.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setLogsCategoryFilter("AUTH")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  logsCategoryFilter === "AUTH" ? "bg-blue-600 text-white shadow-xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                Connexions
+              </button>
+              <button
+                type="button"
+                onClick={() => setLogsCategoryFilter("KYC")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  logsCategoryFilter === "KYC" ? "bg-purple-600 text-white shadow-xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                KYC
+              </button>
+              <button
+                type="button"
+                onClick={() => setLogsCategoryFilter("WORKSPACE")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  logsCategoryFilter === "WORKSPACE" ? "bg-amber-600 text-white shadow-xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                Rôles & Espaces
+              </button>
+            </div>
+          </div>
+
+          {/* Logs Table */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-mono text-[10px] uppercase">
+                  <tr>
+                    <th className="py-3 px-4">Horodatage</th>
+                    <th className="py-3 px-4">Action</th>
+                    <th className="py-3 px-4">Utilisateur / Cible</th>
+                    <th className="py-3 px-4">Détails de l'événement</th>
+                    <th className="py-3 px-4">Adresse IP</th>
+                    <th className="py-3 px-4 text-center">Statut</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {activityLogs
+                    .filter((log) => {
+                      if (logsCategoryFilter === "AUTH") return log.action.includes("LOGIN") || log.action.includes("LOGOUT") || log.action.includes("2FA");
+                      if (logsCategoryFilter === "KYC") return log.action.includes("KYC");
+                      if (logsCategoryFilter === "WORKSPACE") return log.action.includes("WORKSPACE") || log.action.includes("REGISTER");
+                      if (logsCategoryFilter === "SECURITY") return log.action.includes("SECURITY") || log.status === "ERROR" || log.status === "WARNING";
+                      return true;
+                    })
+                    .filter((log) => {
+                      if (!logsSearchQuery) return true;
+                      const q = logsSearchQuery.toLowerCase();
+                      return (
+                        log.action.toLowerCase().includes(q) ||
+                        (log.details && log.details.toLowerCase().includes(q)) ||
+                        (log.user?.email && log.user.email.toLowerCase().includes(q)) ||
+                        (log.user?.name && log.user.name.toLowerCase().includes(q)) ||
+                        (log.ipAddress && log.ipAddress.toLowerCase().includes(q))
+                      );
+                    })
+                    .map((log) => (
+                      <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-3.5 px-4 whitespace-nowrap font-mono text-slate-500 text-[11px]">
+                          {new Date(log.createdAt).toLocaleString("fr-FR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit"
+                          })}
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 rounded-lg text-[10px] font-bold font-mono uppercase ${
+                            log.action.includes("APPROVED") ? "bg-emerald-100 text-emerald-800" :
+                            log.action.includes("REJECT") ? "bg-rose-100 text-rose-800" :
+                            log.action.includes("LOGIN") ? "bg-blue-100 text-blue-800" :
+                            log.action.includes("WORKSPACE") ? "bg-amber-100 text-amber-800" :
+                            "bg-slate-100 text-slate-800"
+                          }`}>
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          {log.user ? (
+                            <div>
+                              <div className="font-bold text-slate-900">{log.user.name}</div>
+                              <div className="text-[10px] text-slate-400 font-mono">{log.user.email}</div>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 font-mono text-[11px]">{log.resource || "Système"}</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-700 max-w-xs sm:max-w-md">
+                          <span className="line-clamp-2 leading-relaxed">{log.details || log.resource}</span>
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap font-mono text-slate-500 text-[11px]">
+                          {log.ipAddress || "127.0.0.1"}
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap text-center">
+                          <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
+                            log.status === "SUCCESS" ? "bg-emerald-50 text-emerald-700" :
+                            log.status === "WARNING" ? "bg-amber-50 text-amber-700" :
+                            log.status === "ERROR" ? "bg-rose-50 text-rose-700" :
+                            "bg-slate-50 text-slate-700"
+                          }`}>
+                            <span>{log.status || "INFO"}</span>
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
       {selectedUserForDetail && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden border border-slate-200 shadow-2xl flex flex-col my-8 animate-scale-in text-slate-800">
@@ -944,9 +1202,7 @@ export default function AdminPortal({
                   <Calendar className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span className="font-bold">Inscrit le:</span>
                   <span className="font-mono text-slate-900">
-                    {selectedUserForDetail.createdAt && !isNaN(new Date(selectedUserForDetail.createdAt).getTime())
-                      ? new Date(selectedUserForDetail.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })
-                      : "Date non disponible"}
+                    {formatAccountCreationDate(selectedUserForDetail.createdAt)}
                   </span>
                 </div>
               </div>

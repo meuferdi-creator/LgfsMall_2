@@ -3,6 +3,7 @@ import { Heart, Trash2, ShoppingBag, Search, ArrowUpDown, Tag, AlertCircle, Chec
 import { Product } from "../types";
 import { useAppStore } from "../store";
 import ProductCard from "./ProductCard";
+import { useTranslation } from "../hooks/useTranslation";
 
 interface WishlistSectionProps {
   products: Product[];
@@ -17,6 +18,7 @@ export default function WishlistSection({
   onOpenDetail,
   onGoToCatalog
 }: WishlistSectionProps) {
+  const { t } = useTranslation();
   const { wishlist, toggleWishlist, clearWishlist, addToCart } = useAppStore();
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"newest" | "price_asc" | "price_desc" | "discount" | "stock">("newest");
@@ -73,10 +75,10 @@ export default function WishlistSection({
             <div className="p-2 bg-rose-500/20 text-rose-400 rounded-xl border border-rose-500/30">
               <Heart className="w-5 h-5 fill-rose-500 text-rose-500" />
             </div>
-            <h2 className="text-xl sm:text-2xl font-black font-display tracking-tight">Mes Articles Favoris</h2>
+            <h2 className="text-xl sm:text-2xl font-black font-display tracking-tight">{t.wishlist}</h2>
           </div>
           <p className="text-xs text-emerald-200">
-            {favoriteProducts.length} article(s) enregistré(s) dans vos coup de cœur. Retrouvez facilement vos produits préférés.
+            {favoriteProducts.length} {t.productsCount}
           </p>
         </div>
 
@@ -87,7 +89,7 @@ export default function WishlistSection({
               className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-emerald-950 font-extrabold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center space-x-2"
             >
               <ShoppingBag className="w-4 h-4" />
-              <span>Tout Ajouter au Panier</span>
+              <span>{t.addToCart}</span>
             </button>
 
             <button
@@ -99,7 +101,7 @@ export default function WishlistSection({
               className="px-3 py-2 bg-white/10 hover:bg-rose-600/80 text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center space-x-1.5 border border-white/20"
             >
               <Trash2 className="w-4 h-4 text-rose-300" />
-              <span>Tout Vider</span>
+              <span>{t.cancel}</span>
             </button>
           </div>
         )}
@@ -119,9 +121,9 @@ export default function WishlistSection({
             <Heart className="w-8 h-8" />
           </div>
           <div className="max-w-md mx-auto space-y-2">
-            <h3 className="text-lg font-bold text-emerald-950">Votre liste de favoris est vide</h3>
+            <h3 className="text-lg font-bold text-emerald-950">{t.wishlist}</h3>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Vous n'avez pas encore marqué d'articles en coup de cœur. Cliquez sur l'icône de cœur sur n'importe quel produit du catalogue pour l'ajouter ici.
+              {t.emptyCartSubtitle}
             </p>
           </div>
           <button
@@ -129,7 +131,7 @@ export default function WishlistSection({
             className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-lg transition-all cursor-pointer inline-flex items-center space-x-2"
           >
             <ShoppingBag className="w-4 h-4" />
-            <span>Explorer le Catalogue Produits</span>
+            <span>{t.continueShopping}</span>
           </button>
         </div>
       ) : (

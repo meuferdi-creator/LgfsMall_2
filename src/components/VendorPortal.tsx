@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Wallet, ShoppingBag, Plus, Clock, Coins, Edit, Trash, AlertCircle, MapPin, Navigation, Save, ShieldCheck, CheckCircle2, BarChart3, Star, Sparkles, Upload, Download, Calculator, Volume2, VolumeX, Bell, X, KeyRound, Lock, Tag, Copy, Check, Calendar, Percent } from "lucide-react";
+import { Wallet, ShoppingBag, Plus, Clock, Coins, Edit, Trash, Trash2, Loader2, AlertCircle, MapPin, Navigation, Save, ShieldCheck, CheckCircle2, BarChart3, Star, Sparkles, Upload, Download, Calculator, Volume2, VolumeX, Bell, X, KeyRound, Lock, Tag, Copy, Check, Calendar, Percent } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { User, Product, Order, Coupon } from "../types";
 import { getGoogleMaps, TOGO_HUBS, calculateRoute } from "../lib/maps";
@@ -7,6 +7,7 @@ import { firestoreSync, auth } from "../lib/firebase";
 import ProductImageUploader from "./ProductImageUploader";
 import SellerProfitCalculator from "./SellerProfitCalculator";
 import { PasswordInput } from "./PasswordInput";
+import { useTranslation } from "../hooks/useTranslation";
 
 interface VendorPortalProps {
   user: User;
@@ -35,6 +36,7 @@ export default function VendorPortal({
   isLoading,
   fetchVendorOrders
 }: VendorPortalProps) {
+  const { t } = useTranslation();
   const [vendorTab, setVendorTab] = useState<"articles" | "form" | "sales" | "escrow" | "profil" | "analytics" | "reviews" | "calculator" | "promos">("articles");
   const [dispatchOtp, setDispatchOtp] = useState<{ [orderId: string]: string }>({});
 
@@ -127,6 +129,29 @@ export default function VendorPortal({
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [pwdChangeSuccess, setPwdChangeSuccess] = useState("");
   const [pwdChangeError, setPwdChangeError] = useState("");
+
+  // Product Deletion State & Modal
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isDeletingProduct, setIsDeletingProduct] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleConfirmDeleteProduct = async () => {
+    if (!productToDelete) return;
+    setIsDeletingProduct(true);
+    setDeleteError(null);
+    try {
+      const ok = await deleteProduct(productToDelete.id);
+      if (ok) {
+        setProductToDelete(null);
+      } else {
+        setDeleteError("Impossible de supprimer cet article. Veuillez réessayer.");
+      }
+    } catch (err: any) {
+      setDeleteError(err?.message || "Erreur réseau lors de la suppression.");
+    } finally {
+      setIsDeletingProduct(false);
+    }
+  };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -726,7 +751,7 @@ export default function VendorPortal({
           }`}
         >
           <ShoppingBag className="w-4 h-4" />
-          <span>Catalogue</span>
+          <span>{t.products}</span>
         </button>
         <button
           id="tab-vendor-new"
@@ -738,7 +763,7 @@ export default function VendorPortal({
           }`}
         >
           <Plus className="w-4 h-4" />
-          <span>Ajouter Article</span>
+          <span>{t.addProduct}</span>
         </button>
         <button
           id="tab-vendor-sales"
@@ -750,7 +775,7 @@ export default function VendorPortal({
           }`}
         >
           <Clock className="w-4 h-4" />
-          <span>Ventes ({filteredVendorOrders.length})</span>
+          <span>{t.myOrders} ({filteredVendorOrders.length})</span>
         </button>
         <button
           id="tab-vendor-calculator"
@@ -762,7 +787,7 @@ export default function VendorPortal({
           }`}
         >
           <Calculator className="w-4 h-4" />
-          <span>Calculateur Profit</span>
+          <span>Calculateur</span>
         </button>
         <button
           id="tab-vendor-analytics"
@@ -774,7 +799,7 @@ export default function VendorPortal({
           }`}
         >
           <BarChart3 className="w-4 h-4" />
-          <span>Analytics</span>
+          <span>{t.analytics}</span>
         </button>
         <button
           id="tab-vendor-reviews"
@@ -789,7 +814,7 @@ export default function VendorPortal({
           }`}
         >
           <Star className="w-4 h-4" />
-          <span>Avis & Retours</span>
+          <span>{t.reviews}</span>
           {notifications.filter((n) => !n.read).length > 0 && (
             <span className="absolute top-1.5 right-1.5 bg-rose-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-bounce">
               {notifications.filter((n) => !n.read).length}
@@ -806,7 +831,7 @@ export default function VendorPortal({
           }`}
         >
           <Wallet className="w-4 h-4" />
-          <span>Portefeuille</span>
+          <span>{t.escrowWallet}</span>
         </button>
         <button
           id="tab-vendor-profile"
@@ -818,7 +843,7 @@ export default function VendorPortal({
           }`}
         >
           <ShieldCheck className="w-4 h-4" />
-          <span>Profil Boutique</span>
+          <span>{t.profile}</span>
         </button>
 
         {/* Audio Sound Toggle Button */}
@@ -996,10 +1021,9 @@ export default function VendorPortal({
                           <Edit className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={async () => {
-                            if (confirm("Voulez-vous vraiment supprimer cet article de la boutique ?")) {
-                              await deleteProduct(p.id);
-                            }
+                          onClick={() => {
+                            setDeleteError(null);
+                            setProductToDelete(p);
                           }}
                           className="p-1.5 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors cursor-pointer"
                           title="Supprimer"
@@ -2062,6 +2086,102 @@ export default function VendorPortal({
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Product Confirmation Modal */}
+      {productToDelete && (
+        <div 
+          id="delete-product-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in"
+          onClick={() => {
+            if (!isDeletingProduct) {
+              setProductToDelete(null);
+              setDeleteError(null);
+            }
+          }}
+        >
+          <div 
+            className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-150 space-y-6 relative overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top decorative accent */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-rose-500" />
+
+            <div className="flex items-start space-x-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="space-y-1 flex-1">
+                <h3 className="text-lg font-black text-slate-900 font-display">Supprimer cet article ?</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Cette action supprimera définitivement cet article du catalogue de votre boutique LGF.
+                </p>
+              </div>
+            </div>
+
+            {/* Product summary card */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center space-x-3">
+              {productToDelete.image && (
+                <img 
+                  src={productToDelete.image} 
+                  alt={productToDelete.title} 
+                  referrerPolicy="no-referrer"
+                  className="w-14 h-14 object-cover rounded-xl border border-slate-200 shrink-0 bg-white" 
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <span className="text-[9px] font-bold font-mono text-emerald-800 bg-white border border-emerald-100 px-1.5 py-0.5 rounded uppercase">
+                  {productToDelete.category}
+                </span>
+                <h4 className="text-xs font-bold text-slate-900 truncate mt-1">{productToDelete.title}</h4>
+                <div className="flex items-center space-x-3 text-[11px] mt-0.5">
+                  <span className="text-emerald-700 font-bold">{formatCurrency(productToDelete.price)}</span>
+                  <span className="text-slate-500 font-medium">Stock: {productToDelete.stock}</span>
+                </div>
+              </div>
+            </div>
+
+            {deleteError && (
+              <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center space-x-2 font-medium">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex items-center justify-end space-x-3 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingProduct}
+                onClick={() => {
+                  setProductToDelete(null);
+                  setDeleteError(null);
+                }}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingProduct}
+                onClick={handleConfirmDeleteProduct}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-md shadow-rose-600/20 flex items-center space-x-2 cursor-pointer disabled:opacity-50"
+              >
+                {isDeletingProduct ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Suppression...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Supprimer définitivement</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

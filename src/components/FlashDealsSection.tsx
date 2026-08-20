@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Zap, Clock, ShoppingCart, Eye, Star, Flame, Store } from "lucide-react";
 import { Product } from "../types";
 import { getOptimizedImageUrl } from "../utils/imageOptimizer";
+import { useTranslation } from "../hooks/useTranslation";
 
 interface FlashDealsSectionProps {
   products: Product[];
@@ -16,6 +17,7 @@ export default function FlashDealsSection({
   onBuy,
   onOpenDetail
 }: FlashDealsSectionProps) {
+  const { t } = useTranslation();
   // Live countdown timer state (e.g. 14h : 28m : 45s)
   const [timeLeft, setTimeLeft] = useState({ hours: 14, minutes: 28, seconds: 45 });
 
@@ -68,13 +70,13 @@ export default function FlashDealsSection({
           </div>
           <div>
             <h3 className="text-xl font-black font-display text-slate-900 dark:text-white flex items-center">
-              Ventes Flash du Jour
+              {t.flashDeals}
               <span className="ml-2 bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
-                Jusqu'à -50%
+                -50%
               </span>
             </h3>
             <p className="text-xs text-slate-600 dark:text-amber-100 font-medium mt-0.5">
-              Stocks limités à Lomé — Prix imbattables garantis en Séquestre LGF
+              {t.escrowProtected} • {t.fastDelivery}
             </p>
           </div>
         </div>
@@ -83,7 +85,7 @@ export default function FlashDealsSection({
         <div className="flex items-center space-x-2 bg-slate-900 text-white px-4 py-2 rounded-2xl border border-slate-800 shadow-md self-start sm:self-auto">
           <Clock className="w-4 h-4 text-amber-400 animate-spin" />
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">
-            Temps restant :
+            {t.timeRemaining || "Temps restant"} :
           </span>
           <div className="flex items-center space-x-1 font-mono text-xs font-black text-amber-400">
             <span className="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">
@@ -177,8 +179,8 @@ export default function FlashDealsSection({
                 {/* Stock progress */}
                 <div className="space-y-1">
                   <div className="flex justify-between text-[10px] font-bold text-slate-500 dark:text-emerald-300 font-mono">
-                    <span>Vendu : 78%</span>
-                    <span>Stock : {p.stock}</span>
+                    <span>{t.sold || "Vendu"} : 78%</span>
+                    <span>{t.stock || "Stock"} : {p.stock}</span>
                   </div>
                   <div className="w-full bg-slate-100 dark:bg-emerald-900 h-1.5 rounded-full overflow-hidden">
                     <div className="bg-gradient-to-r from-amber-500 to-rose-500 h-full w-[78%] rounded-full"></div>
@@ -191,7 +193,7 @@ export default function FlashDealsSection({
                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-2.5 rounded-xl text-xs transition-all shadow-md shadow-emerald-600/10 flex items-center justify-center space-x-2 cursor-pointer active:scale-95"
                 >
                   <ShoppingCart className="w-3.5 h-3.5" />
-                  <span>Acheter Vite</span>
+                  <span>{t.buyNow}</span>
                 </button>
               </div>
 

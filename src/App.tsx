@@ -45,9 +45,12 @@ import LgfFooter from "./components/LgfFooter";
 import GeminiAssistantWidget from "./components/GeminiAssistantWidget";
 import HelpCenterPage from "./components/HelpCenterPage";
 import InfoPages from "./components/InfoPages";
-import { supabase, isSupabaseConfigured } from "./lib/supabaseClient";
+import MobileProfileModal from "./components/MobileProfileModal";
+import { WorkspaceAccessModal } from "./components/WorkspaceAccessModal";
+import WorkspaceOnboardingTour from "./components/WorkspaceOnboardingTour";
+import { checkWorkspaceAccess, guardWorkspaceAccess } from "./lib/workspaceAuth";
 import { executeGoogleSignIn } from "./lib/firebase";
-import { Session } from "@supabase/supabase-js";
+import { formatAccountCreationDate } from "./lib/utils";
 import { 
   ShoppingBag, 
   ShieldCheck, 
@@ -104,6 +107,7 @@ export default function App() {
     investments,
     isLoading,
     error,
+    setError,
     successMessage,
     wishlist,
     addToCart,
@@ -185,14 +189,6 @@ export default function App() {
   const [profileName, setProfileName] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
 
-  // Helper for persisted account creation timestamp formatting
-  const formatAccountCreationDate = (createdAt?: string | Date | null) => {
-    if (!createdAt) return "Date non disponible";
-    const d = new Date(createdAt);
-    if (isNaN(d.getTime())) return "Date non disponible";
-    return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
-  };
-
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     const ok = await updateUserProfile({ name: profileName, phone: profilePhone });
@@ -226,7 +222,38 @@ export default function App() {
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isTrackOrderModalOpen, setIsTrackOrderModalOpen] = useState(false);
+  const [isMobileProfileModalOpen, setIsMobileProfileModalOpen] = useState(false);
   const [activePortalRole, setActivePortalRole] = useState<UserRole>("BUYER");
+  const [workspaceModalState, setWorkspaceModalState] = useState<{
+    isOpen: boolean;
+    targetRole: UserRole | null;
+    reason?: "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_CREATED";
+  }>({
+    isOpen: false,
+    targetRole: null,
+    reason: "NOT_CREATED"
+  });
+
+  const handleRequestPortalRoleChange = (role: UserRole) => {
+    const guard = guardWorkspaceAccess(user, role);
+    if (guard.isAllowed) {
+      setActivePortalRole(role);
+      setSandboxRole(role);
+      setCurrentDashboardView("workspace");
+      setTimeout(() => {
+        const dashboardEl = document.getElementById("user-dashboard");
+        if (dashboardEl) {
+          dashboardEl.scrollIntoView({ behavior: "smooth" });
+        }
+      }, 50);
+    } else {
+      setWorkspaceModalState({
+        isOpen: true,
+        targetRole: role,
+        reason: guard.reason
+      });
+    }
+  };
 
   // Theme state & persistence
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -288,89 +315,54 @@ export default function App() {
     userObj: any;
   } | null>(null);
 
-  // Active Supabase session handler
-  const handleSupabaseSession = useCallback(async (session: Session | null) => {
-    if (!session?.user) return;
+  // Google OAuth Loading State for visual feedback
+  const [isGoogleAuthLoading, setIsGoogleAuthLoading] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<"login" | "register">("login");
 
-    const sbUser = session.user;
+  const handleGoogleSignInClick = async (explicitData?: { role?: UserRole }) => {
+    setIsGoogleAuthLoading(true);
+    console.log("🔥 [App Auth] Initiating Google Sign-In sequence...");
 
-    // 1. Retrieve user and check if profile exists in Supabase `profiles` table; if not, insert profile row
     try {
-      const { data: existingProfile, error: fetchErr } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", sbUser.id)
-        .maybeSingle();
-
-      if (!existingProfile && !fetchErr) {
-        const fullName =
-          sbUser.user_metadata?.full_name ||
-          sbUser.user_metadata?.name ||
-          sbUser.email?.split("@")[0] ||
-          "Utilisateur Google";
-        const avatarUrl = sbUser.user_metadata?.avatar_url || "";
-
-        await supabase.from("profiles").insert([
-          {
-            id: sbUser.id,
-            email: sbUser.email,
-            full_name: fullName,
-            avatar_url: avatarUrl,
-            role: "customer",
-            created_at: new Date().toISOString(),
-          },
-        ]);
-      }
-    } catch (err) {
-      console.warn("Supabase profile check/insertion note:", err);
-    }
-
-    // 2. Ensure session persistence & sync account into store/database state
-    const currentStoreUser = useAppStore.getState().user;
-    if (!currentStoreUser && sbUser.email) {
-      const fullName =
-        sbUser.user_metadata?.full_name ||
-        sbUser.user_metadata?.name ||
-        sbUser.email.split("@")[0] ||
-        "Utilisateur Google";
-
-      const success = await loginWithGoogle({
-        email: sbUser.email,
-        name: fullName,
-        uid: sbUser.id,
-        role: "BUYER",
-      });
-
-      if (success) {
-        setIsAuthModalOpen(false);
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }
-    }
-  }, [loginWithGoogle]);
-
-  const handleGoogleSignInClick = async () => {
-    try {
-      console.log("🔥 [Firebase Google Auth] Initiating Google Sign-In...");
       const googleUser = await executeGoogleSignIn();
+
       if (!googleUser) {
-        console.log("🔥 [Firebase Google Auth] Sign-In popup closed or cancelled.");
+        console.log("ℹ️ [App Auth] Google Sign-In popup closed by user or cancelled.");
         return;
       }
 
-      console.log("🔥 [Firebase Google Auth] Authenticated user:", googleUser.email);
+      if (googleUser.requiresEmailPrompt || !googleUser.email || !googleUser.idToken) {
+        console.log("ℹ️ [App Auth] Google OAuth provider notice / code:", googleUser.errorCode || "no_token");
+        if (googleUser.errorCode) {
+          setError(googleUser.errorCode);
+        }
+        return;
+      }
+
+      console.log("✅ [App Auth] Firebase authenticated Google user:", googleUser.email, "(UID:", googleUser.uid, ")");
+      console.log("🔥 [App Auth] Syncing user profile with backend Prisma database (/api/auth/firebase-sync)...");
+
       const success = await loginWithGoogle({
         email: googleUser.email,
         name: googleUser.name,
         uid: googleUser.uid,
-        role: "BUYER",
+        idToken: googleUser.idToken,
+        role: explicitData?.role || "BUYER",
       });
 
       if (success) {
+        console.log("🎉 [App Auth] Backend sync successful! Session established for:", googleUser.email);
         setIsAuthModalOpen(false);
+        setAuthModalMode("login");
         window.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        console.warn("⚠️ [App Auth] Backend sync failed or returned non-200 response.");
       }
     } catch (e: any) {
-      console.error("🔥 [Firebase Google Auth Error]:", e);
+      console.error("🚨 [App Auth Notice] Google Sign-In notice:", e?.message || e);
+      setError(e?.message || "Erreur de connexion Google.");
+    } finally {
+      setIsGoogleAuthLoading(false);
     }
   };
 
@@ -442,55 +434,6 @@ export default function App() {
 
   // Get localized strings
   const t = translations[lang] || translations.FR;
-
-  // Active Supabase auth state listener & automatic profile creation on Google OAuth login
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
-
-    // 0. Detect if running inside OAuth popup callback
-    if (window.opener && (window.location.hash.includes("access_token") || window.location.search.includes("code="))) {
-      try {
-        window.opener.postMessage({ type: "SUPABASE_AUTH_SUCCESS" }, "*");
-      } catch (e) {
-        console.warn("Could not post message to opener:", e);
-      }
-      setTimeout(() => {
-        try { window.close(); } catch (e) {}
-      }, 500);
-    }
-
-    // Retrieve initial active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        handleSupabaseSession(session);
-      }
-    }).catch((err) => {
-      console.warn("Initial Supabase session fetch error:", err);
-    });
-
-    // Listen to Auth State Changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session) {
-        await handleSupabaseSession(session);
-      }
-    });
-
-    // Listen to message from popup
-    const handleMessage = async (event: MessageEvent) => {
-      if (event.data?.type === "SUPABASE_AUTH_SUCCESS" || event.data?.type === "OAUTH_AUTH_SUCCESS") {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          await handleSupabaseSession(session);
-        }
-      }
-    };
-    window.addEventListener("message", handleMessage);
-
-    return () => {
-      subscription.unsubscribe();
-      window.removeEventListener("message", handleMessage);
-    };
-  }, [handleSupabaseSession]);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -594,13 +537,13 @@ export default function App() {
         }}
         onOpenVendorPortal={() => {
           if (!user) {
-            setRegRole("VENDOR");
-            setAuthMode("register");
-            setIsAuthModalOpen(true);
+            setWorkspaceModalState({
+              isOpen: true,
+              targetRole: "VENDOR",
+              reason: "UNAUTHENTICATED"
+            });
           } else {
-            setActivePortalRole("VENDOR");
-            const dashboardEl = document.getElementById("user-dashboard");
-            if (dashboardEl) dashboardEl.scrollIntoView({ behavior: "smooth" });
+            handleRequestPortalRoleChange("VENDOR");
           }
         }}
         onOpenTrackOrders={() => {
@@ -609,16 +552,14 @@ export default function App() {
         logout={logout}
         formatCurrency={formatCurrency}
         activePortalRole={user?.role === "ADMIN" ? sandboxRole : activePortalRole}
-        onChangePortalRole={(role) => {
-          setActivePortalRole(role);
-          setSandboxRole(role);
-          setCurrentDashboardView("workspace");
-          setTimeout(() => {
-            const dashboardEl = document.getElementById("user-dashboard");
-            if (dashboardEl) {
-              dashboardEl.scrollIntoView({ behavior: "smooth" });
-            }
-          }, 50);
+        onChangePortalRole={handleRequestPortalRoleChange}
+        isAuthLoading={isGoogleAuthLoading || isLoading}
+        onWorkspaceAccessDenied={(role, reason) => {
+          setWorkspaceModalState({
+            isOpen: true,
+            targetRole: role,
+            reason: reason || "NOT_CREATED"
+          });
         }}
       />
 
@@ -865,6 +806,21 @@ export default function App() {
                         <span className="text-emerald-950 dark:text-white font-semibold font-mono">
                           {formatAccountCreationDate(user.createdAt)}
                         </span>
+                      </div>
+
+                      {/* Explicit Logout Button in Profile Card */}
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            logout();
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          }}
+                          className="w-full bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-600 hover:text-white dark:hover:bg-rose-600 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 font-bold py-2.5 px-3 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer active:scale-98 shadow-xs"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          <span>Se Déconnecter de la session</span>
+                        </button>
                       </div>
                     </div>
                   ) : (
@@ -1123,7 +1079,9 @@ export default function App() {
                 {/* 2. DYNAMIC WORKSPACE PORTALS RENDER */}
                 <Suspense fallback={<PortalSkeleton />}>
                   {(() => {
-                    const activeRole = user.role === "ADMIN" ? sandboxRole : user.role;
+                    const requestedRole = user.role === "ADMIN" ? sandboxRole : activePortalRole;
+                    const guard = guardWorkspaceAccess(user, requestedRole);
+                    const activeRole = guard.effectiveRole;
                     
                     if (activeRole === "BUYER") {
                       return (
@@ -1447,22 +1405,14 @@ export default function App() {
           aria-label={user ? "Profil utilisateur" : "Connexion à votre compte"}
           onClick={() => {
             if (user) {
-              setCurrentDashboardView("workspace");
-              setTimeout(() => {
-                const dashEl = document.getElementById("user-dashboard");
-                if (dashEl) {
-                  dashEl.scrollIntoView({ behavior: "smooth" });
-                } else {
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }
-              }, 50);
+              setIsMobileProfileModalOpen(true);
             } else {
               setAuthMode("login");
               setIsAuthModalOpen(true);
             }
           }}
           className={`flex flex-col items-center justify-center space-y-1 cursor-pointer py-1 px-2.5 transition-all duration-200 active:scale-95 ${
-            isAuthModalOpen ? "text-amber-400 font-extrabold" : "text-emerald-300/80 hover:text-amber-400"
+            isAuthModalOpen || isMobileProfileModalOpen ? "text-amber-400 font-extrabold" : "text-emerald-300/80 hover:text-amber-400"
           }`}
         >
           <User className="w-5 h-5" />
@@ -1481,9 +1431,15 @@ export default function App() {
       {/* Global Auth Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
+        onClose={() => {
+          setIsAuthModalOpen(false);
+          setAuthModalMode("login");
+        }}
         lang={lang}
         isLoading={isLoading}
+        isGoogleAuthLoading={isGoogleAuthLoading}
+        authMode={authModalMode}
+        onAuthModeChange={setAuthModalMode}
         error={error}
         successMessage={successMessage}
         clearMessages={clearMessages}
@@ -1497,12 +1453,71 @@ export default function App() {
         pendingPurchase={pendingPurchase}
       />
 
+      {/* Mobile Profile & Quick Actions Modal with prominent Logout */}
+      <MobileProfileModal
+        isOpen={isMobileProfileModalOpen}
+        onClose={() => setIsMobileProfileModalOpen(false)}
+        user={user}
+        onLogout={() => {
+          logout();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+        theme={theme}
+        setTheme={setTheme}
+        activePortalRole={activePortalRole}
+        onChangePortalRole={handleRequestPortalRoleChange}
+        onWorkspaceAccessDenied={(role, reason) => {
+          setWorkspaceModalState({
+            isOpen: true,
+            targetRole: role,
+            reason: reason || "NOT_CREATED"
+          });
+        }}
+        onNavigateToDashboard={() => {
+          setCurrentDashboardView("workspace");
+          setTimeout(() => {
+            const dashEl = document.getElementById("user-dashboard");
+            if (dashEl) dashEl.scrollIntoView({ behavior: "smooth" });
+          }, 50);
+        }}
+        onNavigateToOrders={() => {
+          setIsTrackOrderModalOpen(true);
+        }}
+      />
+
+      {/* Global Workspace Authorization & Account Creation Modal */}
+      <WorkspaceAccessModal
+        isOpen={workspaceModalState.isOpen}
+        targetRole={workspaceModalState.targetRole}
+        reason={workspaceModalState.reason}
+        onClose={() => setWorkspaceModalState((prev) => ({ ...prev, isOpen: false }))}
+        onSuccess={(role) => {
+          setActivePortalRole(role);
+          setSandboxRole(role);
+          setCurrentDashboardView("workspace");
+          setTimeout(() => {
+            const dashEl = document.getElementById("user-dashboard");
+            if (dashEl) dashEl.scrollIntoView({ behavior: "smooth" });
+          }, 50);
+        }}
+        onOpenAuthModal={() => {
+          setAuthModalMode("login");
+          setIsAuthModalOpen(true);
+        }}
+      />
+
       {/* Global Track Order Modal */}
       <TrackOrderModal
         isOpen={isTrackOrderModalOpen}
         onClose={() => setIsTrackOrderModalOpen(false)}
         buyerOrders={buyerOrders}
         formatCurrency={formatCurrency}
+      />
+
+      {/* First-time Workspace Onboarding Interactive Tour */}
+      <WorkspaceOnboardingTour
+        currentRole={user?.role === "ADMIN" ? sandboxRole : activePortalRole}
+        userId={user?.id}
       />
 
       {/* Floating Gemini AI Assistant & FAQ Widget */}

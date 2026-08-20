@@ -18,6 +18,7 @@ import {
 import { Product } from "../types";
 import { firestoreSync } from "../lib/firebase";
 import { getOptimizedImageUrl } from "../utils/imageOptimizer";
+import { useTranslation } from "../hooks/useTranslation";
 
 interface ProductDetailModalProps {
   product: Product;
@@ -103,6 +104,7 @@ export default function ProductDetailModal({
   onToggleWishlist,
   onOpenStore
 }: ProductDetailModalProps) {
+  const { t } = useTranslation();
   const [activeImage, setActiveImage] = useState(product.image || "");
   const [selectedSize, setSelectedSize] = useState("Standard");
   const [selectedColor, setSelectedColor] = useState("Original");
@@ -359,30 +361,98 @@ export default function ProductDetailModal({
               </div>
             </div>
 
-            {/* Pricing Section */}
-            <div className="p-4 bg-emerald-50/40 rounded-2xl border border-emerald-100 grid grid-cols-2 gap-4">
-              <div>
-                <span className="text-[9px] font-bold text-emerald-500 uppercase font-mono block">Prix de Détail :</span>
-                <span className={`font-extrabold text-lg block ${isWholesaleActive ? "line-through text-slate-400" : "text-emerald-950"}`}>
-                  {formatCurrency(product.price)}
-                </span>
-              </div>
-              <div>
+            {/* Pricing Section - Clean, Spacious & Non-truncated */}
+            <div className="p-4 bg-emerald-50/80 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200/80 dark:border-emerald-800/70 shadow-2xs space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-stretch">
+                {/* Prix Détail */}
+                <div className="bg-white/95 dark:bg-emerald-900/60 p-3.5 rounded-xl border border-emerald-100 dark:border-emerald-800/60 flex items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase font-mono tracking-wider">
+                      Prix à l'unité
+                    </span>
+                    <span className="text-[9px] text-slate-400 dark:text-slate-400 font-medium">
+                      Tarif standard
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span
+                      className={`font-mono font-black text-base sm:text-lg whitespace-nowrap block ${
+                        isWholesaleActive
+                          ? "line-through text-slate-400 dark:text-slate-500 text-sm"
+                          : "text-emerald-950 dark:text-white"
+                      }`}
+                    >
+                      {formatCurrency(product.price)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Prix Gros ou Disponibilité */}
                 {hasWholesale ? (
-                  <>
-                    <span className="text-[9px] font-bold text-amber-600 uppercase font-mono block">Prix de Gros :</span>
-                    <span className={`font-extrabold text-lg block ${isWholesaleActive ? "text-amber-600 font-black" : "text-slate-500"}`}>
-                      {formatCurrency(wholesalePrice)}
-                    </span>
-                    <span className="text-[8px] text-amber-600 font-bold block uppercase mt-0.5">Dès {wholesaleMin} pièces (-{savingsPercent}%)</span>
-                  </>
+                  <div
+                    className={`p-3.5 rounded-xl border transition-all shadow-2xs flex items-center justify-between gap-3 ${
+                      isWholesaleActive
+                        ? "bg-amber-500 text-white border-amber-600 shadow-xs"
+                        : "bg-amber-50/95 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800/70 text-amber-900 dark:text-amber-100"
+                    }`}
+                  >
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span
+                          className={`text-[10px] font-black uppercase font-mono tracking-wider ${
+                            isWholesaleActive ? "text-amber-100" : "text-amber-800 dark:text-amber-300"
+                          }`}
+                        >
+                          Prix de gros
+                        </span>
+                        <span
+                          className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded leading-none font-mono ${
+                            isWholesaleActive
+                              ? "bg-amber-700 text-white"
+                              : "bg-amber-100 dark:bg-amber-900/90 text-amber-900 dark:text-amber-200 border border-amber-300/80 dark:border-amber-700/60"
+                          }`}
+                        >
+                          Dès {wholesaleMin} pcs
+                        </span>
+                      </div>
+                      <span
+                        className={`text-[9px] font-bold mt-0.5 ${
+                          isWholesaleActive ? "text-amber-100" : "text-amber-700 dark:text-amber-400"
+                        }`}
+                      >
+                        -{savingsPercent}% par article
+                      </span>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span
+                        className={`font-mono font-black text-base sm:text-lg whitespace-nowrap block ${
+                          isWholesaleActive ? "text-white" : "text-amber-700 dark:text-amber-300"
+                        }`}
+                      >
+                        {formatCurrency(wholesalePrice)}
+                      </span>
+                    </div>
+                  </div>
                 ) : (
-                  <>
-                    <span className="text-[9px] font-bold text-emerald-500 uppercase font-mono block">Statut du Stock :</span>
-                    <span className={`text-xs font-bold block mt-1 ${product.stock > 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                      {product.stock > 0 ? `En Stock (${product.stock} dispo)` : "En rupture"}
-                    </span>
-                  </>
+                  <div className="bg-white/95 dark:bg-emerald-900/60 p-3.5 rounded-xl border border-emerald-100 dark:border-emerald-800/60 flex items-center justify-between gap-3 shadow-2xs">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase font-mono tracking-wider">
+                        Disponibilité
+                      </span>
+                      <span className="text-[9px] text-slate-400 dark:text-slate-400 font-medium">
+                        Stock immédiat
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span
+                        className={`text-xs sm:text-sm font-black font-mono block ${
+                          product.stock > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+                        }`}
+                      >
+                        {product.stock > 0 ? `${product.stock} ${t.inStock}` : t.outOfStock}
+                      </span>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -391,7 +461,7 @@ export default function ProductDetailModal({
             <div className="space-y-4">
               {/* Color selectors */}
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-emerald-700 uppercase block font-mono">Variation de couleur :</label>
+                <label className="text-[10px] font-bold text-emerald-700 uppercase block font-mono">Options :</label>
                 <div className="flex flex-wrap gap-2">
                   {colors.map((c: string) => (
                     <button
@@ -411,7 +481,7 @@ export default function ProductDetailModal({
 
               {/* Sizes selector */}
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-emerald-700 uppercase block font-mono">Options de taille / Dimensions :</label>
+                <label className="text-[10px] font-bold text-emerald-700 uppercase block font-mono">Tailles / Dimensions :</label>
                 <div className="flex flex-wrap gap-2">
                   {sizes.map((s) => (
                     <button
@@ -432,14 +502,14 @@ export default function ProductDetailModal({
 
             {/* Description & Specs Tabs */}
             <div className="space-y-3">
-              <span className="text-[10px] font-bold text-emerald-700 uppercase block font-mono">Description complète :</span>
+              <span className="text-[10px] font-bold text-emerald-700 uppercase block font-mono">{t.description} :</span>
               <p className="text-xs text-emerald-900 leading-relaxed font-medium">
                 {product.description}
               </p>
 
               {/* Specs Table */}
               <div className="bg-slate-50 rounded-2xl border border-slate-100 p-4 space-y-2 mt-2">
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block font-mono mb-2">Fiche technique de l'article</span>
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block font-mono mb-2">{t.specifications}</span>
                 <div className="grid grid-cols-2 gap-y-2 text-[11px]">
                   {Object.entries(specs).map(([key, val]) => (
                     <React.Fragment key={key}>
@@ -455,8 +525,8 @@ export default function ProductDetailModal({
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100/70 flex items-start space-x-3 text-xs leading-relaxed">
               <Truck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
               <div>
-                <span className="font-extrabold text-slate-800 block">Délais de Livraison & Transport</span>
-                <b>Lomé (Assigamé/Bè) :</b> Livraison sécurisée sous 24h • <b>Régions (Kara/Dapaong) :</b> 48h à 72h par nos transporteurs partenaires agréés.
+                <span className="font-extrabold text-slate-800 block">{t.fastDelivery}</span>
+                <b>Lomé (Assigamé/Bè) :</b> 24h • <b>Régions (Kara/Dapaong) :</b> 48h - 72h ({t.escrowProtected}).
               </div>
             </div>
 
@@ -475,12 +545,12 @@ export default function ProductDetailModal({
                   {product.vendor?.name?.slice(0, 2) || "VD"}
                 </div>
                 <div className="min-w-0">
-                  <span className="text-[9px] font-bold text-emerald-500 uppercase block font-mono">Vendeur vérifié</span>
+                  <span className="text-[9px] font-bold text-emerald-500 uppercase block font-mono">{t.certifiedMerchant}</span>
                   <span className="font-extrabold text-xs text-emerald-950 group-hover:text-emerald-600 transition-colors block truncate underline decoration-emerald-300 underline-offset-2">
                     {product.vendor?.name || "Boutique d'Assigamé"}
                   </span>
                   <span className="text-[10px] text-emerald-600/90 font-semibold block">
-                    ★ 4.9 (48 ventes complétées) • Voir la boutique →
+                    ★ 4.9 ({t.visitStore} →)
                   </span>
                 </div>
               </div>
@@ -577,7 +647,7 @@ export default function ProductDetailModal({
                       className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer border border-slate-200"
                     >
                       <ChevronLeft className="w-4 h-4 text-slate-600" />
-                      <span>← Retour aux produits</span>
+                      <span>← {t.back}</span>
                     </button>
 
                     <button
@@ -588,7 +658,7 @@ export default function ProductDetailModal({
                       className="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-950 font-bold py-3.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-xs border border-emerald-200"
                     >
                       <ShoppingBag className="w-4 h-4 text-emerald-800" />
-                      <span>Ajouter au Panier</span>
+                      <span>{t.addToCart}</span>
                     </button>
                     
                     <button
@@ -598,7 +668,7 @@ export default function ProductDetailModal({
                       }}
                       className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-md shadow-emerald-600/10"
                     >
-                      <span>Acheter Immédiatement</span>
+                      <span>{t.buyNow}</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>

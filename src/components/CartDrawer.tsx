@@ -15,6 +15,7 @@ import {
   Check
 } from "lucide-react";
 import { Product } from "../types";
+import { useTranslation } from "../hooks/useTranslation";
 import EcobankPaymentCard from "./EcobankPaymentCard";
 import TMoneyPaymentCard from "./TMoneyPaymentCard";
 
@@ -68,6 +69,8 @@ export default function CartDrawer({
   const [checkoutStep, setCheckoutStep] = useState<"cart" | "address" | "payment">("cart");
   const [paymentMethod, setPaymentMethod] = useState("TMoney");
   const [paymentPhone, setPaymentPhone] = useState("");
+
+  const { t } = useTranslation();
 
   if (!isOpen) return null;
 
@@ -232,15 +235,15 @@ export default function CartDrawer({
                 <ShoppingBag className="w-4.5 h-4.5 stroke-[2.5]" />
               </div>
               <div>
-                <h3 id="cart-drawer-title" className="font-extrabold text-sm tracking-tight">Panier Séquestre LGF</h3>
+                <h3 id="cart-drawer-title" className="font-extrabold text-sm tracking-tight">{t.cartTitle}</h3>
                 <span className="text-[10px] text-yellow-500 font-mono font-bold block leading-none">
-                  Multi-Vendeurs d'Assigamé
+                  {t.officialStore}
                 </span>
               </div>
             </div>
             <button 
               onClick={onClose}
-              aria-label="Fermer le panier"
+              aria-label={t.close}
               className="text-emerald-300 hover:text-white p-2.5 rounded-xl cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -249,11 +252,11 @@ export default function CartDrawer({
 
           {/* Stepper Header (Checkout Workflow) */}
           <div className="bg-slate-50 border-b border-slate-200 px-6 py-3 flex justify-between items-center text-[10px] font-bold font-mono text-slate-500 shrink-0">
-            <span className={`${checkoutStep === "cart" ? "text-emerald-600 font-black" : ""}`}>1. MON PANIER</span>
+            <span className={`${checkoutStep === "cart" ? "text-emerald-600 font-black" : ""}`}>1. {t.myCart.toUpperCase()}</span>
             <ChevronRight className="w-3 h-3 text-slate-400" />
-            <span className={`${checkoutStep === "address" ? "text-emerald-600 font-black" : ""}`}>2. LIVRAISON (GPS)</span>
+            <span className={`${checkoutStep === "address" ? "text-emerald-600 font-black" : ""}`}>2. {t.fastDelivery.toUpperCase()}</span>
             <ChevronRight className="w-3 h-3 text-slate-400" />
-            <span className={`${checkoutStep === "payment" ? "text-emerald-600 font-black" : ""}`}>3. FINANCES & PAIEMENT</span>
+            <span className={`${checkoutStep === "payment" ? "text-emerald-600 font-black" : ""}`}>3. {t.securePayments.toUpperCase()}</span>
           </div>
 
           {/* Drawer Body (Content area) */}
@@ -264,13 +267,13 @@ export default function CartDrawer({
                 {cart.length === 0 ? (
                   <div className="text-center py-20 space-y-4">
                     <ShoppingBag className="w-16 h-16 text-emerald-300 mx-auto" />
-                    <p className="text-sm font-bold text-emerald-600">Votre panier LGF est actuellement vide.</p>
-                    <p className="text-xs text-slate-400 max-w-xs mx-auto">Parcourez le catalogue d'Assigamé et ajoutez des textiles, cosmétiques ou alimentation.</p>
+                    <p className="text-sm font-bold text-emerald-600">{t.emptyCart}</p>
+                    <p className="text-xs text-slate-400 max-w-xs mx-auto">{t.emptyCartSubtitle}</p>
                     <button
                       onClick={onClose}
                       className="bg-emerald-600 text-white font-bold text-xs py-2.5 px-6 rounded-xl shadow cursor-pointer"
                     >
-                      Continuer les achats
+                      {t.continueShopping}
                     </button>
                   </div>
                 ) : (

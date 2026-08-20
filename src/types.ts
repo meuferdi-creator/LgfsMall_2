@@ -36,6 +36,10 @@ export interface User {
   name: string;
   phone: string | null;
   role: UserRole;
+  roles?: UserRole[];
+  hasVendorAccount?: boolean;
+  hasDriverAccount?: boolean;
+  hasInvestorAccount?: boolean;
   isEmailVerified?: boolean;
   createdAt: string;
   updatedAt: string;
@@ -78,14 +82,15 @@ export interface Product {
     id: string;
     name: string;
     email: string;
-    phone: string | null;
+    phone?: string | null;
+    role?: UserRole;
   };
   isFlashDeal?: boolean;
   flashPrice?: number | null;
   flashEndTime?: string | null;
   isFeatured?: boolean;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Coupon {
