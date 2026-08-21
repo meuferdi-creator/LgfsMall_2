@@ -36,6 +36,7 @@ interface AppState {
   setLanguage: (lang: SupportedLanguage) => void;
   setError: (err: string | null) => void;
   clearMessages: () => void;
+  checkSession: () => Promise<boolean>;
   initSession: () => Promise<void>;
   login: (email: string, password: string) => Promise<boolean>;
   loginWithGoogle: (data: { email: string; name: string; uid: string; role?: UserRole; phone?: string; idToken?: string }) => Promise<boolean>;
@@ -111,11 +112,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setError: (error) => set({ error }),
   clearMessages: () => set({ error: null, successMessage: null, requiresEmailVerification: false, pendingVerificationEmail: "" }),
 
-  initSession: async () => {
-    const savedToken = localStorage.getItem("lgf_token");
+  checkSession: async (): Promise<boolean> => {
+    const savedToken = typeof window !== "undefined" ? localStorage.getItem("lgf_token") : null;
     if (!savedToken) {
       get().loadLocalCartAndWishlist();
-      return;
+      return false;
     }
 
     set({ isLoading: true, token: savedToken });
@@ -128,26 +129,34 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (res.ok) {
         const data = await safeJson(res);
         if (data?.user) {
-          set({ user: data.user, error: null });
+          set({ user: data.user, token: savedToken, error: null });
           get().loadLocalCartAndWishlist();
           await get().syncCartWithFirebase(data.user.id);
+          return true;
         } else {
-          localStorage.removeItem("lgf_token");
+          if (typeof window !== "undefined") localStorage.removeItem("lgf_token");
           set({ token: null, user: null });
           get().loadLocalCartAndWishlist();
+          return false;
         }
       } else {
-        // Stale session
-        localStorage.removeItem("lgf_token");
+        // Stale or invalid session
+        if (typeof window !== "undefined") localStorage.removeItem("lgf_token");
         set({ token: null, user: null });
         get().loadLocalCartAndWishlist();
+        return false;
       }
     } catch (err) {
-      console.warn("Session restoration notice:", err);
+      console.warn("Session verification notice:", err);
       get().loadLocalCartAndWishlist();
+      return false;
     } finally {
       set({ isLoading: false });
     }
+  },
+
+  initSession: async () => {
+    await get().checkSession();
   },
 
   login: async (email, password) => {
@@ -290,12 +299,28 @@ export const useAppStore = create<AppState>((set, get) => ({
       const data = await safeJson(res);
 
       if (!res.ok) {
-        set({ error: data.error || "Erreur lors de la synchronisation du compte Google." });
+        set({ error: data?.error || "Erreur lors de la synchronisation du compte Google." });
         return false;
       }
 
-      localStorage.setItem("lgf_token", data.token);
-      set({ user: data.user, token: data.token, successMessage: data.message, error: null });
+      if (!data?.user || !data?.token) {
+        set({ error: data?.error || "Données de session invalides reçues du serveur." });
+        return false;
+      }
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("lgf_token", data.token);
+      }
+
+      // Synchronously update the Zustand store user & session state
+      set({
+        user: data.user,
+        token: data.token,
+        successMessage: data.message || "Connexion réussie !",
+        error: null,
+        requiresEmailVerification: false,
+        pendingVerificationEmail: ""
+      });
       
       // Real-time Firestore sync
       if (data.user) {

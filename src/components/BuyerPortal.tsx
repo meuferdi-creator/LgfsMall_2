@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ShoppingBag, Plus, Clock, Search, CheckCircle2, Lock, AlertCircle, Heart } from "lucide-react";
+import { ShoppingBag, Plus, Clock, Search, CheckCircle2, Lock, AlertCircle, Heart, TrendingUp } from "lucide-react";
 import { Product, Order } from "../types";
 import ProductCard from "./ProductCard";
 import { useAppStore } from "../store";
@@ -12,6 +12,7 @@ import EcobankPaymentCard from "./EcobankPaymentCard";
 import TMoneyPaymentCard from "./TMoneyPaymentCard";
 import WishlistSection from "./WishlistSection";
 import HomePageSections from "./HomePageSections";
+import BuyerOrderVolumeChart from "./BuyerOrderVolumeChart";
 import { motion, AnimatePresence } from "framer-motion";
 import { isCategoryMatch } from "../utils/categoryMatcher";
 import { formatUtcDate } from "../lib/utils";
@@ -558,11 +559,18 @@ export default function BuyerPortal({
 
       {/* History view */}
       {buyerTab === "history" && (
-        <div id="buyer-history-section" className="bg-white rounded-3xl p-8 border border-emerald-100/50 shadow-xl text-emerald-950 space-y-6">
-          <h3 className="text-lg font-bold text-emerald-950 font-display flex items-center">
-            <Clock className="w-5 h-5 mr-2 text-emerald-600" />
-            Historique des Achats & Escrow
-          </h3>
+        <div id="buyer-history-section" className="space-y-6 text-emerald-950">
+          {/* 30-Day Order Volume & Spending Line Chart */}
+          <BuyerOrderVolumeChart
+            orders={buyerOrders}
+            formatCurrency={formatCurrency}
+          />
+
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-emerald-100/50 shadow-xl space-y-6">
+            <h3 className="text-lg font-bold text-emerald-950 font-display flex items-center">
+              <Clock className="w-5 h-5 mr-2 text-emerald-600" />
+              Historique Détaillé des Achats & Escrow
+            </h3>
 
           {buyerOrders.length === 0 ? (
             <div className="text-center py-8 bg-emerald-50/40 rounded-2xl border border-dashed border-emerald-100">
@@ -636,6 +644,7 @@ export default function BuyerPortal({
               ))}
             </div>
           )}
+          </div>
         </div>
       )}
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { PasswordInput } from "./PasswordInput";
-import { ArrowRight, User as UserIcon, XCircle, CheckCircle2, Lock, ShoppingBag, ShieldCheck, Sparkles, AlertTriangle, RefreshCw } from "lucide-react";
+import { ArrowRight, User as UserIcon, XCircle, CheckCircle2, Lock, ShoppingBag, ShieldCheck, Sparkles, AlertTriangle, RefreshCw, Copy, Check, ExternalLink, HelpCircle } from "lucide-react";
 import { UserRole } from "../types";
 import { translations, SupportedLanguage } from "../translations";
 import { useAppStore } from "../store";
@@ -9,7 +9,14 @@ import NotificationBanner from "./NotificationBanner";
 import { auth } from "../lib/firebase";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 
-interface AuthModalProps {
+interface FirebaseAuthErrorDetails {
+  title: string;
+  description: string;
+  isOriginMismatch?: boolean;
+  retryActionText?: string;
+}
+
+export interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   lang: SupportedLanguage;
@@ -22,20 +29,31 @@ interface AuthModalProps {
   clearMessages: () => void;
   login: (email: string, pass: string) => Promise<boolean>;
   register: (data: any) => Promise<boolean>;
+  activeFirebaseUser?: { email: string; displayName?: string | null; photoURL?: string | null } | null;
   onGoogleSignIn: (explicitData?: { role?: UserRole }) => void;
   onOpenResetPassword: () => void;
   pendingPurchase?: { productId: string; quantity: number } | null;
 }
 
-function parseFirebaseAuthError(errorMessage: string | null): {
-  title: string;
-  description: string;
-  retryActionText?: string;
-} | null {
+function parseFirebaseAuthError(errorMessage: string | null): FirebaseAuthErrorDetails | null {
   if (!errorMessage) return null;
   const lower = errorMessage.toLowerCase();
 
-  if (lower.includes("popup-closed-by-user") || lower.includes("popup_closed_by_user")) {
+  if (
+    lower.includes("origin-mismatch") ||
+    lower.includes("origin_mismatch") ||
+    lower.includes("unauthorized-domain") || 
+    lower.includes("unauthorized_domain")
+  ) {
+    return {
+      title: "Google OAuth : Erreur 400 (origin_mismatch)",
+      description: "L'URL de votre application déployée n'est pas encore enregistrée dans les origines JavaScript autorisées de votre console Google Cloud / Firebase.",
+      isOriginMismatch: true,
+      retryActionText: "Réessayer la connexion"
+    };
+  }
+
+  if (lower.includes("popup-closed-by-user") || lower.includes("popup_closed_by_user") || lower.includes("closed by user")) {
     return {
       title: "Fenêtre Google fermée",
       description: "La fenêtre de connexion Google a été fermée avant la validation. Vous pouvez relancer la connexion interactive.",
@@ -51,18 +69,36 @@ function parseFirebaseAuthError(errorMessage: string | null): {
     };
   }
 
-  if (lower.includes("popup-blocked") || lower.includes("popup_blocked")) {
+  if (
+    lower.includes("popup-blocked") || 
+    lower.includes("popup_blocked") || 
+    lower.includes("failed to open popup") ||
+    lower.includes("blocked by the browser") ||
+    lower.includes("gsi_logger")
+  ) {
     return {
-      title: "Pop-up bloquée par le navigateur",
-      description: "Votre navigateur ou l'environnement a bloqué la fenêtre pop-up Google SSO. Veuillez autoriser les fenêtres pop-up ou cliquer ci-dessous pour réessayer.",
+      title: "Fenêtre pop-up bloquée par le navigateur",
+      description: "Votre navigateur ou l'environnement a bloqué la fenêtre pop-up Google. Vous pouvez autoriser les pop-ups pour ce site ou vous connecter directement avec vos identifiants ci-dessous.",
       retryActionText: "Ouvrir la connexion Google"
     };
   }
 
-  if (lower.includes("unauthorized-domain") || lower.includes("unauthorized_domain")) {
+  if (
+    lower.includes("configuration-not-found") ||
+    lower.includes("configuration_not_found") ||
+    lower.includes("operation-not-allowed")
+  ) {
     return {
-      title: "Domaine non enregistré (Firebase)",
-      description: "Le domaine actuel doit être ajouté aux domaines autorisés Firebase Authentication dans la console Google Cloud / Firebase.",
+      title: "Connexion Google Sécurisée",
+      description: "Authentifiez-vous directement avec votre compte Google en un clic.",
+      retryActionText: "Se connecter avec Google"
+    };
+  }
+
+  if (lower.includes("network-request-failed") || lower.includes("network_error")) {
+    return {
+      title: "Erreur réseau",
+      description: "Vérifiez votre connexion internet et réessayez.",
       retryActionText: "Réessayer"
     };
   }
@@ -83,6 +119,7 @@ export default function AuthModal({
   clearMessages,
   login,
   register,
+  activeFirebaseUser: propActiveFirebaseUser,
   onGoogleSignIn,
   onOpenResetPassword,
   pendingPurchase
@@ -106,13 +143,29 @@ export default function AuthModal({
   const [regPassword, setRegPassword] = useState("");
   const [regRole, setRegRole] = useState<UserRole>("BUYER");
 
+  // Copy state for diagnostic URLs
+  const [copiedItem, setCopiedItem] = useState<string | null>(null);
+  const [showConfigGuide, setShowConfigGuide] = useState(false);
+
+  const currentOrigin = typeof window !== "undefined" ? window.location.origin : "";
+  const currentHostname = typeof window !== "undefined" ? window.location.hostname : "";
+
+  const handleCopy = (text: string, label: string) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedItem(label);
+      setTimeout(() => setCopiedItem(null), 2500);
+    }
+  };
+
   // Active Firebase User session
-  const [activeFirebaseUser, setActiveFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [internalActiveFirebaseUser, setInternalActiveFirebaseUser] = useState<FirebaseUser | null>(null);
+  const activeFirebaseUser = propActiveFirebaseUser !== undefined ? propActiveFirebaseUser : internalActiveFirebaseUser;
 
   useEffect(() => {
     if (!auth) return;
     const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
-      setActiveFirebaseUser(fbUser);
+      setInternalActiveFirebaseUser(fbUser);
     });
     return () => unsubscribe();
   }, []);
@@ -166,17 +219,92 @@ export default function AuthModal({
 
         {/* Dedicated Firebase Auth Error UI */}
         {firebaseErrorDetails && (
-          <div className="my-2 p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl space-y-2">
+          <div className="my-2 p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl space-y-2.5 text-left">
             <div className="flex items-start space-x-2.5">
               <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-              <div className="text-left">
+              <div className="flex-1">
                 <h5 className="text-xs font-bold text-amber-900 dark:text-amber-200">{firebaseErrorDetails.title}</h5>
-                <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed mt-0.5">
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed mt-0.5">
                   {firebaseErrorDetails.description}
                 </p>
               </div>
             </div>
-            {firebaseErrorDetails.retryActionText && (
+
+            {/* If origin_mismatch / unauthorized-domain, show quick-copy buttons and guide */}
+            {firebaseErrorDetails.isOriginMismatch && (
+              <div className="pt-1 space-y-2 border-t border-amber-200/80 dark:border-amber-800/50">
+                <div className="space-y-1.5">
+                  <div className="text-[10px] font-bold text-amber-900 dark:text-amber-200 uppercase tracking-wider">
+                    Origine de cette version déployée :
+                  </div>
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5">
+                    <div className="flex-1 bg-white dark:bg-emerald-950/90 border border-amber-300 dark:border-amber-700/80 rounded-lg px-2.5 py-1.5 font-mono text-[10px] text-slate-800 dark:text-amber-200 truncate select-all">
+                      {currentOrigin}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(currentOrigin, "origin")}
+                      className="px-2.5 py-1.5 bg-amber-700 hover:bg-amber-800 text-white rounded-lg text-[10px] font-bold flex items-center justify-center space-x-1 shrink-0 cursor-pointer shadow-xs transition-all"
+                    >
+                      {copiedItem === "origin" ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-300" />
+                          <span>Copié !</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copier l'Origine</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowConfigGuide(!showConfigGuide)}
+                    className="text-[11px] font-bold text-amber-800 dark:text-amber-300 hover:underline flex items-center space-x-1 cursor-pointer"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                    <span>{showConfigGuide ? "Masquer le guide" : "Comment enregistrer ce domaine (2 min)"}</span>
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearMessages();
+                      setAuthMode("login");
+                    }}
+                    className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
+                  >
+                    Connexion par Email ci-dessous ↓
+                  </button>
+                </div>
+
+                {showConfigGuide && (
+                  <div className="p-3 bg-white dark:bg-emerald-900/60 border border-amber-200 dark:border-emerald-700/60 rounded-xl space-y-2 text-[11px] text-slate-700 dark:text-emerald-200 leading-relaxed animate-in fade-in-50 duration-200">
+                    <div className="font-bold text-slate-900 dark:text-white flex items-center space-x-1.5">
+                      <span>📌 Deux étapes simples dans Google Cloud & Firebase :</span>
+                    </div>
+                    <ol className="list-decimal list-inside space-y-1.5 pl-0.5">
+                      <li>
+                        <strong>Console Google Cloud</strong> : Rendez-vous dans <em>APIs & Services &gt; Identifiants</em> &gt; Ouvrez votre ID client <em>OAuth 2.0 (Application Web)</em> &gt; Ajoutez <code className="px-1 py-0.5 bg-slate-100 dark:bg-emerald-950 rounded text-[10px] text-emerald-700 dark:text-emerald-300 font-mono">{currentOrigin}</code> dans <strong>Origines JavaScript autorisées</strong> &gt; Enregistrer.
+                      </li>
+                      <li>
+                        <strong>Console Firebase</strong> : Rendez-vous dans <em>Authentication &gt; Paramètres &gt; Domaines autorisés</em> &gt; Cliquez sur <em>Ajouter un domaine</em> avec <code className="px-1 py-0.5 bg-slate-100 dark:bg-emerald-950 rounded text-[10px] text-emerald-700 dark:text-emerald-300 font-mono">{currentHostname}</code>.
+                      </li>
+                    </ol>
+                    <p className="text-[10px] text-slate-500 dark:text-emerald-300 italic pt-0.5">
+                      💡 Astuce : En attendant la propagation (environ 2 min), vous pouvez créer un compte ou vous connecter directement avec un email ci-dessous.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!firebaseErrorDetails.isOriginMismatch && firebaseErrorDetails.retryActionText && (
               <div className="pt-1 flex items-center justify-end space-x-2">
                 <button
                   type="button"

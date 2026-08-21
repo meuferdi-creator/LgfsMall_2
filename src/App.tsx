@@ -46,10 +46,12 @@ import GeminiAssistantWidget from "./components/GeminiAssistantWidget";
 import HelpCenterPage from "./components/HelpCenterPage";
 import InfoPages from "./components/InfoPages";
 import MobileProfileModal from "./components/MobileProfileModal";
+import MobileFaqDrawer from "./components/MobileFaqDrawer";
 import { WorkspaceAccessModal } from "./components/WorkspaceAccessModal";
 import WorkspaceOnboardingTour from "./components/WorkspaceOnboardingTour";
 import { checkWorkspaceAccess, guardWorkspaceAccess } from "./lib/workspaceAuth";
-import { executeGoogleSignIn } from "./lib/firebase";
+import { executeGoogleSignIn, auth } from "./lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import { formatAccountCreationDate } from "./lib/utils";
 import { 
   ShoppingBag, 
@@ -85,7 +87,8 @@ import {
   Home,
   Grid,
   ShoppingCart,
-  User
+  User,
+  HelpCircle
 } from "lucide-react";
 
 export default function App() {
@@ -113,6 +116,7 @@ export default function App() {
     addToCart,
     setLanguage,
     clearMessages,
+    checkSession,
     initSession,
     login,
     loginWithGoogle,
@@ -221,6 +225,7 @@ export default function App() {
   const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isMobileFaqOpen, setIsMobileFaqOpen] = useState(false);
   const [isTrackOrderModalOpen, setIsTrackOrderModalOpen] = useState(false);
   const [isMobileProfileModalOpen, setIsMobileProfileModalOpen] = useState(false);
   const [activePortalRole, setActivePortalRole] = useState<UserRole>("BUYER");
@@ -318,6 +323,24 @@ export default function App() {
   // Google OAuth Loading State for visual feedback
   const [isGoogleAuthLoading, setIsGoogleAuthLoading] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<"login" | "register">("login");
+  const [activeFirebaseUser, setActiveFirebaseUser] = useState<{ email: string; displayName?: string | null; photoURL?: string | null } | null>(null);
+
+  // Sync active Firebase user session for instant 1-click authentication
+  useEffect(() => {
+    if (!auth) return;
+    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+      if (fbUser?.email) {
+        setActiveFirebaseUser({
+          email: fbUser.email,
+          displayName: fbUser.displayName,
+          photoURL: fbUser.photoURL
+        });
+      } else {
+        setActiveFirebaseUser(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleGoogleSignInClick = async (explicitData?: { role?: UserRole }) => {
     setIsGoogleAuthLoading(true);
@@ -333,7 +356,11 @@ export default function App() {
 
       if (googleUser.requiresEmailPrompt || !googleUser.email || !googleUser.idToken) {
         console.log("ℹ️ [App Auth] Google OAuth provider notice / code:", googleUser.errorCode || "no_token");
-        if (googleUser.errorCode) {
+        if (
+          googleUser.errorCode &&
+          googleUser.errorCode !== "auth/popup-closed-by-user" &&
+          googleUser.errorCode !== "auth/cancelled-popup-request"
+        ) {
           setError(googleUser.errorCode);
         }
         return;
@@ -351,9 +378,19 @@ export default function App() {
       });
 
       if (success) {
-        console.log("🎉 [App Auth] Backend sync successful! Session established for:", googleUser.email);
+        const loggedInUser = useAppStore.getState().user;
+        const targetRole = loggedInUser?.role || explicitData?.role || "BUYER";
+        console.log("🎉 [App Auth] Backend sync successful! Session established for:", googleUser.email, "Target Role:", targetRole);
+        
+        setActivePortalRole(targetRole);
+        setSandboxRole(targetRole);
         setIsAuthModalOpen(false);
         setAuthModalMode("login");
+
+        if (pendingPurchase) {
+          setIsCartDrawerOpen(true);
+        }
+
         window.scrollTo({ top: 0, behavior: "smooth" });
       } else {
         console.warn("⚠️ [App Auth] Backend sync failed or returned non-200 response.");
@@ -377,12 +414,13 @@ export default function App() {
     localStorage.setItem("lgf-mall-theme", theme);
   }, [theme]);
 
-  // Fetch initial session, stats, and default products catalog
+  // Initial Session Check: Verifies validity of 'lgf_token' from local storage against /api/auth/me
+  // Also loads platform stats and default product catalog
   useEffect(() => {
-    initSession();
+    checkSession();
     fetchStats();
     fetchProducts();
-  }, [initSession, fetchStats, fetchProducts]);
+  }, [checkSession, fetchStats, fetchProducts]);
 
   // Auto-redirect user to their dedicated role portal upon login
   useEffect(() => {
@@ -1385,7 +1423,7 @@ export default function App() {
           type="button"
           aria-label={`Panier (${cart.reduce((a, c) => a + c.quantity, 0)} articles)`}
           onClick={() => setIsCartDrawerOpen(true)}
-          className={`flex flex-col items-center justify-center space-y-1 cursor-pointer py-1 px-2.5 relative transition-all duration-200 active:scale-95 ${
+          className={`flex flex-col items-center justify-center space-y-1 cursor-pointer py-1 px-2 relative transition-all duration-200 active:scale-95 ${
             isCartDrawerOpen ? "text-amber-400 font-extrabold" : "text-emerald-300/80 hover:text-amber-400"
           }`}
         >
@@ -1400,6 +1438,19 @@ export default function App() {
           <span className="text-[10px] font-bold tracking-tight">Panier</span>
         </button>
 
+        {/* Mobile Help & FAQ Drawer Trigger */}
+        <button
+          type="button"
+          aria-label="Aide & FAQ Support"
+          onClick={() => setIsMobileFaqOpen(true)}
+          className={`flex flex-col items-center justify-center space-y-1 cursor-pointer py-1 px-2 transition-all duration-200 active:scale-95 ${
+            isMobileFaqOpen ? "text-amber-400 font-extrabold" : "text-emerald-300/80 hover:text-amber-400"
+          }`}
+        >
+          <HelpCircle className="w-5 h-5" />
+          <span className="text-[10px] font-bold tracking-tight">Aide</span>
+        </button>
+
         <button
           type="button"
           aria-label={user ? "Profil utilisateur" : "Connexion à votre compte"}
@@ -1411,7 +1462,7 @@ export default function App() {
               setIsAuthModalOpen(true);
             }
           }}
-          className={`flex flex-col items-center justify-center space-y-1 cursor-pointer py-1 px-2.5 transition-all duration-200 active:scale-95 ${
+          className={`flex flex-col items-center justify-center space-y-1 cursor-pointer py-1 px-2 transition-all duration-200 active:scale-95 ${
             isAuthModalOpen || isMobileProfileModalOpen ? "text-amber-400 font-extrabold" : "text-emerald-300/80 hover:text-amber-400"
           }`}
         >
@@ -1419,6 +1470,13 @@ export default function App() {
           <span className="text-[10px] font-bold tracking-tight">{user ? "Profil" : "Connexion"}</span>
         </button>
       </nav>
+
+      {/* Mobile FAQ Slide-in Drawer */}
+      <MobileFaqDrawer
+        isOpen={isMobileFaqOpen}
+        onClose={() => setIsMobileFaqOpen(false)}
+        onOpenHelpCenter={() => navigateToRoute("help")}
+      />
 
       {/* Password Reset Modal */}
       <PasswordResetModal
@@ -1445,6 +1503,7 @@ export default function App() {
         clearMessages={clearMessages}
         login={login}
         register={register}
+        activeFirebaseUser={activeFirebaseUser}
         onGoogleSignIn={handleGoogleSignInClick}
         onOpenResetPassword={() => {
           setIsAuthModalOpen(false);

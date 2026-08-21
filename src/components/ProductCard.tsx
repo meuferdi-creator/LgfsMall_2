@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ShoppingBag, ArrowRight, Check, HelpCircle, Layers, TrendingDown, Heart, Store } from "lucide-react";
+import { ShoppingBag, ArrowRight, Check, HelpCircle, Layers, TrendingDown, Heart, Store, AlertTriangle, Flame } from "lucide-react";
 import { Product } from "../types";
 import { firestoreSync } from "../lib/firebase";
 import { useAppStore } from "../store";
@@ -201,6 +201,11 @@ export default function ProductCard({
               <span className="bg-rose-600 text-white font-mono text-[9px] font-bold px-2.5 py-1 rounded-lg uppercase">
                 Rupture
               </span>
+            ) : product.stock < 5 ? (
+              <span className="bg-gradient-to-r from-rose-500 to-amber-500 text-white font-mono text-[9px] font-black px-2.5 py-1 rounded-lg uppercase tracking-tight flex items-center space-x-1 shadow-md animate-pulse">
+                <Flame className="w-3 h-3 fill-white" />
+                <span>Plus que {product.stock} !</span>
+              </span>
             ) : (
               <span className="bg-amber-500 text-emerald-950 font-mono text-[9px] font-bold px-2.5 py-1 rounded-lg uppercase">
                 Stock: {product.stock}
@@ -385,6 +390,16 @@ export default function ProductCard({
           {/* Interactive Wholesale Simulator Area */}
           {product.stock > 0 && (
             <div className="space-y-3 pt-1">
+              {/* Real-time low stock urgency banner */}
+              {product.stock < 5 && (
+                <div className="flex items-center space-x-2 px-3 py-2 rounded-xl bg-amber-500/15 dark:bg-amber-950/60 border border-amber-500/40 text-amber-900 dark:text-amber-200 text-[11px] font-bold shadow-2xs">
+                  <Flame className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 animate-pulse" />
+                  <span>
+                    ⚡ <strong>Stock limité :</strong> plus que <strong>{product.stock}</strong> exemplaire{product.stock > 1 ? "s" : ""} disponible{product.stock > 1 ? "s" : ""} !
+                  </span>
+                </div>
+              )}
+
               {/* Dynamic quantity select and summary */}
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase font-mono">Simuler la quantité :</span>

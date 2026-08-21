@@ -106,9 +106,11 @@ export default function HeroBanner({ onSelectCategory, onOpenFlashDeals }: HeroB
             {slide.titlePrefix}
             <span className="text-amber-400 drop-shadow-md">{slide.titleHighlight}</span>
           </h2>
-          <p className="text-sm sm:text-base text-slate-200/90 leading-relaxed font-medium max-w-xl">
-            {slide.subtitle}
-          </p>
+          <div className="inline-block max-w-2xl bg-[#009669] dark:bg-emerald-600 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl sm:rounded-2xl shadow-lg border border-emerald-400/30">
+            <p className="text-xs sm:text-sm md:text-base text-white font-semibold sm:font-bold leading-relaxed">
+              {slide.subtitle}
+            </p>
+          </div>
 
           {/* Action Buttons */}
           <div className="pt-2 flex flex-wrap items-center gap-3">

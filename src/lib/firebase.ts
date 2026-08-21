@@ -251,10 +251,39 @@ export interface GoogleSignInResult {
 }
 
 /**
+ * Ensures Google Identity Services (GSI) script is loaded in the DOM.
+ */
+async function ensureGoogleIdentityServicesLoaded(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  if ((window as any).google?.accounts?.oauth2) return true;
+  return new Promise((resolve) => {
+    const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+    if (!existing) {
+      const script = document.createElement("script");
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.head.appendChild(script);
+    } else {
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if ((window as any).google?.accounts?.oauth2 || attempts > 25) {
+          clearInterval(interval);
+          resolve(!!(window as any).google?.accounts?.oauth2);
+        }
+      }, 100);
+    }
+  });
+}
+
+/**
  * Tries Google Identity Services (GSI) OAuth token client using GCP OAuth Client ID
- * Features an automatic 1000ms safety timeout to handle popup blocker interceptions in iframes.
  */
 async function tryGoogleIdentityServicesAuth(): Promise<GoogleSignInResult | null> {
+  await ensureGoogleIdentityServicesLoaded();
   return new Promise((resolve) => {
     let isCompleted = false;
     const finish = (res: GoogleSignInResult | null) => {
@@ -264,18 +293,22 @@ async function tryGoogleIdentityServicesAuth(): Promise<GoogleSignInResult | nul
       }
     };
 
+    // User-action timeout (120 seconds to allow standard account selection)
     const safetyTimer = setTimeout(() => {
-      console.log("ℹ️ [GSI OAuth Step] Timeout reached (1000ms) or popup intercepted by browser.");
+      console.log("ℹ️ [GSI OAuth Step] OAuth window timed out.");
       finish(null);
-    }, 1000);
+    }, 120000);
 
     try {
-      const clientId = (firebaseConfig as any).oAuthClientId || import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.VITE_FIREBASE_APP_ID;
+      const rawClientId = (firebaseConfig as any).oAuthClientId || import.meta.env.VITE_GOOGLE_CLIENT_ID;
+      const isValidOAuthClientId = rawClientId && typeof rawClientId === "string" && rawClientId.includes(".apps.googleusercontent.com");
       const g = (typeof window !== "undefined" && (window as any).google);
-      if (!clientId || !g?.accounts?.oauth2) {
+      if (!isValidOAuthClientId || !g?.accounts?.oauth2) {
         clearTimeout(safetyTimer);
         return finish(null);
       }
+
+      const clientId = rawClientId;
 
       console.log("🌐 [GSI OAuth Step] Initializing Google Identity Services Token Client with Client ID:", clientId);
       const client = g.accounts.oauth2.initTokenClient({
@@ -313,15 +346,28 @@ async function tryGoogleIdentityServicesAuth(): Promise<GoogleSignInResult | nul
         error_callback: (err: any) => {
           clearTimeout(safetyTimer);
           console.warn("⚠️ [GSI OAuth Step] Token client error callback:", err);
-          finish(null);
+          const errType = err?.type || err?.error || "gsi_error";
+          finish({
+            email: "",
+            name: "",
+            uid: "",
+            requiresEmailPrompt: true,
+            errorCode: errType === "origin_mismatch" ? "auth/origin-mismatch" : `auth/${errType}`
+          });
         }
       });
 
       client.requestAccessToken({ prompt: "select_account" });
-    } catch (e) {
+    } catch (e: any) {
       clearTimeout(safetyTimer);
       console.warn("⚠️ [GSI OAuth Step] Exception during client request:", e);
-      finish(null);
+      finish({
+        email: "",
+        name: "",
+        uid: "",
+        requiresEmailPrompt: true,
+        errorCode: e?.message?.includes("origin") ? "auth/origin-mismatch" : "auth/gsi-failed"
+      });
     }
   });
 }
@@ -427,8 +473,12 @@ export async function executeGoogleSignIn(): Promise<GoogleSignInResult | null> 
         message: errorMessage
       });
 
-      if (errorCode === "auth/popup-closed-by-user" || errorCode === "auth/cancelled-popup-request") {
-        console.log("ℹ️ [Step 2/4 - Notice] User closed the Google OAuth popup before completing sign-in.");
+      if (
+        errorCode === "auth/popup-closed-by-user" ||
+        errorCode === "auth/cancelled-popup-request" ||
+        errorCode === "auth/popup-blocked"
+      ) {
+        console.log("ℹ️ [Step 2/4 - Notice] Google OAuth popup closed or blocked by browser:", errorCode);
         console.groupEnd();
         return {
           email: "",
@@ -439,14 +489,20 @@ export async function executeGoogleSignIn(): Promise<GoogleSignInResult | null> 
         };
       }
 
-      // Tier 2: Try Google Identity Services (GSI) with safe timeout
+      // Tier 2: Seamlessly Try Google Identity Services (GSI) OAuth fallback
       console.log("🔄 [Fallback Tier 2] Attempting Google Identity Services (GSI) OAuth fallback...");
       try {
         const gsiResult = await tryGoogleIdentityServicesAuth();
-        if (gsiResult && gsiResult.idToken) {
-          console.log("🎉 [Fallback Tier 2 - Success] GSI OAuth completed successfully!");
-          console.groupEnd();
-          return gsiResult;
+        if (gsiResult) {
+          if (gsiResult.idToken) {
+            console.log("🎉 [Fallback Tier 2 - Success] GSI OAuth completed successfully!");
+            console.groupEnd();
+            return gsiResult;
+          }
+          if (gsiResult.errorCode) {
+            console.groupEnd();
+            return gsiResult;
+          }
         }
       } catch (gsiErr) {
         console.log("ℹ️ [Fallback Tier 2 - Notice] GSI fallback notice:", gsiErr);
@@ -461,6 +517,17 @@ export async function executeGoogleSignIn(): Promise<GoogleSignInResult | null> 
         errorCode
       };
     }
+  }
+
+  // Tier 3: Direct GSI fallback if Firebase Auth instance not present
+  try {
+    const gsiResult = await tryGoogleIdentityServicesAuth();
+    if (gsiResult && gsiResult.idToken) {
+      console.groupEnd();
+      return gsiResult;
+    }
+  } catch (directGsiErr) {
+    console.warn("⚠️ Direct GSI notice:", directGsiErr);
   }
 
   console.groupEnd();
