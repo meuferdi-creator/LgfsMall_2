@@ -476,9 +476,13 @@ export async function executeGoogleSignIn(): Promise<GoogleSignInResult | null> 
       if (
         errorCode === "auth/popup-closed-by-user" ||
         errorCode === "auth/cancelled-popup-request" ||
-        errorCode === "auth/popup-blocked"
+        errorCode === "auth/popup-blocked" ||
+        errorCode === "auth/unauthorized-domain" ||
+        errorCode === "auth/invalid-api-key" ||
+        errorCode === "auth/operation-not-allowed" ||
+        errorCode === "auth/internal-error"
       ) {
-        console.log("ℹ️ [Step 2/4 - Notice] Google OAuth popup closed or blocked by browser:", errorCode);
+        console.log("ℹ️ [Step 2/4 - Notice] Google OAuth popup closed, blocked, or unauthorized domain:", errorCode);
         console.groupEnd();
         return {
           email: "",
@@ -487,25 +491,6 @@ export async function executeGoogleSignIn(): Promise<GoogleSignInResult | null> 
           requiresEmailPrompt: true,
           errorCode
         };
-      }
-
-      // Tier 2: Seamlessly Try Google Identity Services (GSI) OAuth fallback
-      console.log("🔄 [Fallback Tier 2] Attempting Google Identity Services (GSI) OAuth fallback...");
-      try {
-        const gsiResult = await tryGoogleIdentityServicesAuth();
-        if (gsiResult) {
-          if (gsiResult.idToken) {
-            console.log("🎉 [Fallback Tier 2 - Success] GSI OAuth completed successfully!");
-            console.groupEnd();
-            return gsiResult;
-          }
-          if (gsiResult.errorCode) {
-            console.groupEnd();
-            return gsiResult;
-          }
-        }
-      } catch (gsiErr) {
-        console.log("ℹ️ [Fallback Tier 2 - Notice] GSI fallback notice:", gsiErr);
       }
 
       console.groupEnd();
@@ -519,7 +504,7 @@ export async function executeGoogleSignIn(): Promise<GoogleSignInResult | null> 
     }
   }
 
-  // Tier 3: Direct GSI fallback if Firebase Auth instance not present
+  // Tier 2: Direct GSI only if Firebase Auth instance is not initialized
   try {
     const gsiResult = await tryGoogleIdentityServicesAuth();
     if (gsiResult && gsiResult.idToken) {

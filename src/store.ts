@@ -161,20 +161,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   login: async (email, password) => {
     set({ isLoading: true, error: null, successMessage: null });
+    const cleanEmail = typeof email === "string" ? email.trim() : "";
+    const cleanPassword = typeof password === "string" ? password.trim() : "";
     try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: cleanEmail, password: cleanPassword }),
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       
       if (!res.ok) {
         if (data.requiresEmailVerification) {
           set({
             error: data.error || "Veuillez confirmer votre adresse e-mail avant de continuer.",
             requiresEmailVerification: true,
-            pendingVerificationEmail: email
+            pendingVerificationEmail: cleanEmail
           });
           return false;
         }
@@ -597,8 +599,6 @@ export const useAppStore = create<AppState>((set, get) => ({
           parsed.forEach((prod: any) => {
             firestoreSync.saveDocument("products", prod.id, prod);
           });
-        } else {
-          set({ products: DEFAULT_CATALOG_PRODUCTS });
         }
       } else {
         if (get().products.length === 0) {

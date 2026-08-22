@@ -172,7 +172,9 @@ export default function AuthModal({
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const ok = await login(email, password);
+    const cleanEmail = email.trim();
+    const cleanPassword = password.trim();
+    const ok = await login(cleanEmail, cleanPassword);
     if (ok) {
       setEmail("");
       setPassword("");
@@ -183,10 +185,10 @@ export default function AuthModal({
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const ok = await register({
-      name: regName,
-      email: regEmail,
-      phone: regPhone,
-      password: regPassword,
+      name: regName.trim(),
+      email: regEmail.trim(),
+      phone: regPhone.trim(),
+      password: regPassword.trim(),
       role: regRole
     });
     if (ok) {
