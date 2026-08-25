@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, lazy, Suspense } from "react";
 import { useAppStore } from "./store";
 import { translations, SupportedLanguage } from "./translations";
-import { UserRole } from "./types";
+import { UserRole, Product } from "./types";
 
 // Lazy load Portal components to optimize bundle size and load performance
 const BuyerPortal = lazy(() => import("./components/BuyerPortal"));
@@ -39,12 +39,15 @@ import LgfHeader from "./components/LgfHeader";
 import HeroBanner from "./components/HeroBanner";
 import FlashDealsSection from "./components/FlashDealsSection";
 import AuthModal from "./components/AuthModal";
+import ProductDetailModal from "./components/ProductDetailModal";
+import StoreModal from "./components/StoreModal";
 import TrackOrderModal from "./components/TrackOrderModal";
 import NotificationBanner from "./components/NotificationBanner";
 import LgfFooter from "./components/LgfFooter";
 import GeminiAssistantWidget from "./components/GeminiAssistantWidget";
 import HelpCenterPage from "./components/HelpCenterPage";
 import InfoPages from "./components/InfoPages";
+import NotFoundPage from "./components/NotFoundPage";
 import MobileProfileModal from "./components/MobileProfileModal";
 import MobileFaqDrawer from "./components/MobileFaqDrawer";
 import { WorkspaceAccessModal } from "./components/WorkspaceAccessModal";
@@ -113,6 +116,7 @@ export default function App() {
     setError,
     successMessage,
     wishlist,
+    toggleWishlist,
     addToCart,
     setLanguage,
     clearMessages,
@@ -164,6 +168,18 @@ export default function App() {
   const [orderPaymentMethod, setOrderPaymentMethod] = useState("TMoney");
   const [orderPhone, setOrderPhone] = useState("");
   const [showOrderModal, setShowOrderModal] = useState(false);
+
+  // Global Product Detail & Store modals (for Flash Deals, Live Commerce & Highlights)
+  const [selectedProductForDetail, setSelectedProductForDetail] = useState<Product | null>(null);
+  const [selectedStoreVendorId, setSelectedStoreVendorId] = useState<string | null>(null);
+  const [selectedStoreName, setSelectedStoreName] = useState<string | null>(null);
+  const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
+
+  const handleOpenStoreModal = (vendorId: string, storeName: string) => {
+    setSelectedStoreVendorId(vendorId);
+    setSelectedStoreName(storeName);
+    setIsStoreModalOpen(true);
+  };
 
   // Vendor product creation / editing form state
   const [prodTitle, setProdTitle] = useState("");
@@ -304,6 +320,37 @@ export default function App() {
       window.removeEventListener("popstate", syncRouteFromLocation);
     };
   }, []);
+
+  // Update Page Title and Meta Description dynamically based on route
+  useEffect(() => {
+    const routeTitles: Record<string, string> = {
+      home: "LGF's Mall | Le Marché Africain & E-Commerce Sécurisé au Togo",
+      help: "Centre d'Aide & Support Client 7j/7 | LGF's Mall",
+      faq: "Foire Aux Questions (FAQ) & Guides d'Achat | LGF's Mall",
+      about: "Qui sommes-nous ? Notre Mission | LGF's Mall",
+      careers: "Recrutement & Carrières | LGF's Mall",
+      blog: "Actualités & Conseils E-Commerce en Afrique | LGF's Mall",
+      press: "Espace Presse & Médias | LGF's Mall",
+      sustainability: "Notre Engagement Durable & RSE | LGF's Mall",
+      delivery: "Livraison & Expédition Rapide au Togo | LGF's Mall",
+      shipping: "Frais & Zones de Livraison | LGF's Mall",
+      returns: "Politique de Retours & Remboursements Séquestre | LGF's Mall",
+      payments: "Moyens de Paiement Sécurisés (Mobile Money & Cartes) | LGF's Mall",
+      commissions: "Barème des Commissions Vendeurs & Tarifs | LGF's Mall",
+      ads: "Publicité Sponsorisée & Visibilité Marchande | LGF's Mall",
+      affiliates: "Programme Partenaires & Affiliation | LGF's Mall",
+      terms: "Conditions Générales d'Utilisation (CGU) | LGF's Mall",
+      privacy: "Politique de Confidentialité & Données Personnelles | LGF's Mall",
+      cookies: "Politique relative aux Cookies | LGF's Mall"
+    };
+
+    const isKnownRoute = Object.keys(routeTitles).includes(currentRoute) || currentRoute === "" || currentRoute === "home";
+    if (isKnownRoute) {
+      document.title = routeTitles[currentRoute] || routeTitles.home;
+    } else {
+      document.title = "Page Non Trouvée (404) | LGF's Mall";
+    }
+  }, [currentRoute]);
 
   const navigateToRoute = (route: string) => {
     setCurrentRoute(route);
@@ -587,6 +634,7 @@ export default function App() {
         onOpenTrackOrders={() => {
           setIsTrackOrderModalOpen(true);
         }}
+        onNavigate={navigateToRoute}
         logout={logout}
         formatCurrency={formatCurrency}
         activePortalRole={user?.role === "ADMIN" ? sandboxRole : activePortalRole}
@@ -642,6 +690,18 @@ export default function App() {
             }}
             onOpenTrackOrders={() => setIsTrackOrderModalOpen(true)}
           />
+        ) : (currentRoute !== "home" && currentRoute !== "") ? (
+          <NotFoundPage
+            onNavigateHome={() => navigateToRoute("home")}
+            onNavigateHelp={() => navigateToRoute("help")}
+            onOpenCatalog={() => {
+              navigateToRoute("home");
+              setTimeout(() => {
+                const catalogEl = document.getElementById("public-catalog") || document.getElementById("buyer-portal");
+                if (catalogEl) catalogEl.scrollIntoView({ behavior: "smooth" });
+              }, 100);
+            }}
+          />
         ) : (
           <>
             {/* HERO BANNER & PROMOTIONAL FLASH DEALS */}
@@ -670,8 +730,7 @@ export default function App() {
                 }
               }}
               onOpenDetail={(product) => {
-                setOrderProductId(product.id);
-                setShowOrderModal(true);
+                setSelectedProductForDetail(product);
               }}
             />
           </div>
@@ -749,7 +808,7 @@ export default function App() {
             </div>
 
             {/* WORKSPACE & LIVE NAVIGATION */}
-            <div className="bg-white/95 backdrop-blur-md p-1.5 rounded-2xl border border-emerald-100/80 shadow-md flex space-x-2 max-w-md">
+            <div className="bg-white dark:bg-emerald-950 p-1.5 rounded-2xl border border-emerald-100/80 dark:border-emerald-800/80 shadow-md flex space-x-2 max-w-md">
               <button
                 onClick={() => setCurrentDashboardView("workspace")}
                 className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-2 ${
@@ -1240,8 +1299,15 @@ export default function App() {
 
       {/* EMAIL VERIFICATION MODAL */}
       {showSimulatedEmailModal && simulatedUserForVerification && (
-        <div className="fixed inset-0 bg-emerald-950/90 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-slate-100 rounded-3xl max-w-lg w-full overflow-hidden border border-slate-200 shadow-2xl flex flex-col my-8 animate-scale-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div 
+            className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+            onClick={() => {
+              setShowSimulatedEmailModal(false);
+              setSimulatedUserForVerification(null);
+            }} 
+          />
+          <div className="relative z-10 bg-slate-100 rounded-3xl max-w-lg w-full overflow-hidden border border-slate-200 shadow-2xl flex flex-col my-8 animate-scale-in">
             {/* Mail Client Header */}
             <div className="bg-slate-800 text-white p-4 flex items-center justify-between border-b border-slate-700">
               <div className="flex items-center space-x-2">
@@ -1362,18 +1428,19 @@ export default function App() {
       />
 
       {/* MOBILE FIXED BOTTOM NAVIGATION BAR */}
-      <nav aria-label="Navigation mobile principale" className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-emerald-950/95 border-t border-emerald-800/80 backdrop-blur-xl px-2 py-2 flex items-center justify-around text-emerald-300 shadow-2xl">
+      <nav aria-label="Navigation mobile principale" className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-emerald-950 border-t border-emerald-800 px-2 py-2 flex items-center justify-around text-emerald-300 shadow-2xl">
         <button
           type="button"
           aria-label="Accueil"
           onClick={() => {
+            navigateToRoute("home");
             setCurrentDashboardView("workspace");
             setCatalogCategory("Tous");
             setCatalogSearch("");
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
           className={`flex flex-col items-center justify-center space-y-1 cursor-pointer py-1 px-2.5 transition-all duration-200 active:scale-95 ${
-            currentDashboardView === "workspace" ? "text-amber-400 font-extrabold scale-105" : "text-emerald-300/80 hover:text-amber-400"
+            currentRoute === "home" && currentDashboardView === "workspace" ? "text-amber-400 font-extrabold scale-105" : "text-emerald-300/80 hover:text-amber-400"
           }`}
         >
           <Home className="w-5 h-5" />
@@ -1384,6 +1451,7 @@ export default function App() {
           type="button"
           aria-label="Catégories du catalogue"
           onClick={() => {
+            navigateToRoute("home");
             setCurrentDashboardView("workspace");
             setTimeout(() => {
               const categoriesEl = document.getElementById("categories-grid-section") || document.getElementById("catalog-section") || document.getElementById("public-catalog");
@@ -1404,11 +1472,12 @@ export default function App() {
           type="button"
           aria-label="Diffusions en direct"
           onClick={() => {
+            navigateToRoute("home");
             setCurrentDashboardView("live");
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
           className={`flex flex-col items-center justify-center space-y-1 cursor-pointer py-1 px-2.5 relative transition-all duration-200 active:scale-95 ${
-            currentDashboardView === "live" ? "text-amber-400 font-extrabold scale-105" : "text-emerald-300/80 hover:text-amber-400"
+            currentRoute === "home" && currentDashboardView === "live" ? "text-amber-400 font-extrabold scale-105" : "text-emerald-300/80 hover:text-amber-400"
           }`}
         >
           <div className="relative">
@@ -1562,6 +1631,57 @@ export default function App() {
         onOpenAuthModal={() => {
           setAuthModalMode("login");
           setIsAuthModalOpen(true);
+        }}
+      />
+
+      {/* Global Product Detail Modal for Flash Deals & Previews */}
+      {selectedProductForDetail && (
+        <ProductDetailModal
+          product={selectedProductForDetail}
+          products={products}
+          onClose={() => setSelectedProductForDetail(null)}
+          formatCurrency={formatCurrency}
+          onAddToCart={(product, qty, size, color) => {
+            addToCart(product, qty, size, color);
+            setSelectedProductForDetail(null);
+            setIsCartDrawerOpen(true);
+          }}
+          onBuyNow={(productId, qty) => {
+            const targetProd = products.find((p) => p.id === productId) || selectedProductForDetail;
+            if (targetProd) {
+              addToCart(targetProd, qty);
+              setIsCartDrawerOpen(true);
+            }
+            setSelectedProductForDetail(null);
+          }}
+          isInWishlist={wishlist.includes(selectedProductForDetail.id)}
+          onToggleWishlist={toggleWishlist}
+          onOpenStore={(vendorId, storeName) => {
+            setSelectedProductForDetail(null);
+            handleOpenStoreModal(vendorId, storeName);
+          }}
+        />
+      )}
+
+      {/* Global Boutique Store Modal */}
+      <StoreModal
+        isOpen={isStoreModalOpen}
+        onClose={() => setIsStoreModalOpen(false)}
+        vendorId={selectedStoreVendorId}
+        storeName={selectedStoreName}
+        products={products}
+        formatCurrency={formatCurrency}
+        onBuyProduct={(productId, qty, color) => {
+          setIsStoreModalOpen(false);
+          const targetProd = products.find((p) => p.id === productId);
+          if (targetProd) {
+            addToCart(targetProd, qty, undefined, color);
+            setIsCartDrawerOpen(true);
+          }
+        }}
+        onOpenDetail={(product) => {
+          setIsStoreModalOpen(false);
+          setSelectedProductForDetail(product);
         }}
       />
 

@@ -220,27 +220,28 @@ export const useAppStore = create<AppState>((set, get) => ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, name, password, phone, role }),
       });
-      const data = await res.json();
+      const data = await safeJson(res);
 
       if (!res.ok) {
-        set({ error: data.error || "Erreur lors de l'inscription." });
+        set({ error: data?.error || "Erreur lors de la création du compte." });
         return false;
       }
 
-      // SECURITY FIX: Do NOT auto-login after registration
-      // User must verify email first
-      if (data.requiresEmailVerification) {
+      // If explicit email verification requested
+      if (data?.requiresEmailVerification) {
         set({ 
-          successMessage: data.message || "Inscription réussie ! Veuillez vérifier votre adresse e-mail.",
+          successMessage: data?.message || "Compte créé avec succès ! Veuillez vérifier votre adresse e-mail.",
           error: null,
           requiresEmailVerification: true,
           pendingVerificationEmail: email
         });
-        return false; // Return false to prevent auto-login, UI should show verification prompt
+        return false;
       }
 
-      localStorage.setItem("lgf_token", data.token);
-      set({ user: data.user, token: data.token, successMessage: data.message, error: null });
+      if (data?.token) {
+        localStorage.setItem("lgf_token", data.token);
+      }
+      set({ user: data.user, token: data.token, successMessage: data.message || "Compte créé avec succès !", error: null });
       
       // Real-time Firestore sync
       if (data.user) {
@@ -250,7 +251,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       
       return true;
     } catch (err) {
-      set({ error: "Une erreur réseau est survenue lors de l'inscription." });
+      set({ error: "Une erreur réseau est survenue lors de l'inscription. Veuillez vérifier votre connexion." });
       return false;
     } finally {
       set({ isLoading: false });

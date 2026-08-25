@@ -15,6 +15,10 @@ interface ProductCardProps {
   onOpenStore?: (vendorId: string, storeName: string) => void;
 }
 
+// In-memory cache for vendor profiles across all product cards to boost mobile fluidity
+const vendorProfileCache = new Map<string, any>();
+const vendorPendingRequests = new Map<string, Promise<any>>();
+
 export default function ProductCard({
   product,
   formatCurrency,
@@ -28,7 +32,9 @@ export default function ProductCard({
   const effectiveActionText = actionText || t.buyNow || "Acheter avec Escrow";
   const isFavorite = wishlist.includes(product.id);
   const [qty, setQty] = useState(1);
-  const [vendorProfile, setVendorProfile] = useState<any | null>(null);
+  const [vendorProfile, setVendorProfile] = useState<any | null>(() => {
+    return product.vendorId ? (vendorProfileCache.get(product.vendorId) || null) : null;
+  });
   const [selectedImageIdx, setSelectedImageIdx] = useState(0);
 
   const productImages = (product.images && Array.isArray(product.images) && product.images.length > 0)
@@ -38,19 +44,39 @@ export default function ProductCard({
   const activeImage = productImages[selectedImageIdx] || productImages[0];
 
   useEffect(() => {
+    let isMounted = true;
     const loadVendorProfile = async () => {
-      if (product.vendorId) {
-        try {
-          const profile = await firestoreSync.getDocument("vendors", product.vendorId);
-          if (profile) {
+      if (!product.vendorId) return;
+
+      if (vendorProfileCache.has(product.vendorId)) {
+        setVendorProfile(vendorProfileCache.get(product.vendorId));
+        return;
+      }
+
+      try {
+        let fetchPromise = vendorPendingRequests.get(product.vendorId);
+        if (!fetchPromise) {
+          fetchPromise = firestoreSync.getDocument("vendors", product.vendorId);
+          vendorPendingRequests.set(product.vendorId, fetchPromise);
+        }
+
+        const profile = await fetchPromise;
+        if (profile) {
+          vendorProfileCache.set(product.vendorId, profile);
+          if (isMounted) {
             setVendorProfile(profile);
           }
-        } catch (e) {
-          console.error("Error loading vendor profile for card:", e);
         }
+      } catch (e) {
+        // Non-blocking fallback
+      } finally {
+        vendorPendingRequests.delete(product.vendorId);
       }
     };
     loadVendorProfile();
+    return () => {
+      isMounted = false;
+    };
   }, [product.vendorId]);
 
   // Variants & Colors handling
@@ -61,37 +87,16 @@ export default function ProductCard({
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
   const activeVariant = parsedVariants[selectedVariantIdx];
 
-  // Touch handlers for responsive mobile tap without scroll interference
-  const touchStartPos = React.useRef<{ x: number; y: number } | null>(null);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartPos.current = {
-      x: e.touches[0].clientX,
-      y: e.touches[0].clientY,
-    };
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStartPos.current) return;
-    const touchEnd = e.changedTouches[0];
-    const dx = Math.abs(touchEnd.clientX - touchStartPos.current.x);
-    const dy = Math.abs(touchEnd.clientY - touchStartPos.current.y);
-    if (dx < 10 && dy < 10) {
-      if (onOpenDetail) {
-        onOpenDetail(product);
-      }
-    }
-    touchStartPos.current = null;
-  };
-
   const hasWholesale = !!(product.wholesalePrice && product.wholesaleMinQty);
   const wholesaleMin = product.wholesaleMinQty || 1;
   const wholesalePrice = product.wholesalePrice || product.price;
 
+  const maxAvailableStock = product.stock > 0 ? product.stock : 999;
   const isWholesaleActive = hasWholesale && qty >= wholesaleMin;
   const basePrice = activeVariant?.price ? activeVariant.price : product.price;
   const activeUnitPrice = isWholesaleActive ? wholesalePrice : basePrice;
-  const totalPrice = activeUnitPrice * qty;
+  const totalPrice = Math.round(activeUnitPrice * qty);
+  const packPrice = Math.round(wholesaleMin * wholesalePrice);
 
   // Calculate savings percentage and absolute savings
   const savingsPercent = hasWholesale
@@ -99,7 +104,7 @@ export default function ProductCard({
     : 0;
 
   const totalSavings = isWholesaleActive
-    ? (product.price - wholesalePrice) * qty
+    ? Math.round((product.price - wholesalePrice) * qty)
     : 0;
 
   const progressPercent = hasWholesale
@@ -107,7 +112,7 @@ export default function ProductCard({
     : 0;
 
   const handleIncrement = () => {
-    if (qty < product.stock) {
+    if (qty < maxAvailableStock) {
       setQty((prev) => prev + 1);
     }
   };
@@ -120,11 +125,11 @@ export default function ProductCard({
 
   const handleQtyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value) || 1;
-    setQty(Math.max(1, Math.min(product.stock, val)));
+    setQty(Math.max(1, Math.min(maxAvailableStock, val)));
   };
 
   const handleJumpToWholesale = () => {
-    if (hasWholesale && product.stock >= wholesaleMin) {
+    if (hasWholesale && maxAvailableStock >= wholesaleMin) {
       setQty(wholesaleMin);
     }
   };
@@ -140,8 +145,6 @@ export default function ProductCard({
     >
       <div 
         onClick={() => onOpenDetail && onOpenDetail(product)} 
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
         className={onOpenDetail ? "cursor-pointer" : ""}
       >
         {/* Product Image & Badge Overlay */}
@@ -157,7 +160,7 @@ export default function ProductCard({
 
           {/* Multiple Image Thumbnail Selector */}
           {productImages.length > 1 && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 flex space-x-1 z-10 bg-black/60 backdrop-blur-md px-2 py-1 rounded-full border border-white/20">
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 flex space-x-1 z-10 bg-black/75 px-2 py-1 rounded-full border border-white/20">
               {productImages.map((_, idx) => (
                 <button
                   key={idx}
@@ -176,7 +179,7 @@ export default function ProductCard({
           )}
           
           {/* Category Badge */}
-          <span className="absolute top-3 left-3 bg-emerald-600/95 dark:bg-emerald-700/95 backdrop-blur-md text-white font-mono text-[9px] font-bold px-2.5 py-1 rounded-lg uppercase tracking-wider">
+          <span className="absolute top-3 left-3 bg-emerald-700 text-white font-mono text-[9px] font-bold px-2.5 py-1 rounded-lg uppercase tracking-wider shadow-sm">
             {product.category}
           </span>
 
@@ -187,10 +190,10 @@ export default function ProductCard({
                 e.stopPropagation();
                 toggleWishlist(product.id);
               }}
-              className={`p-1.5 rounded-full backdrop-blur-md shadow-md transition-all transform active:scale-125 cursor-pointer ${
+              className={`p-1.5 rounded-full shadow-md transition-all transform active:scale-125 cursor-pointer ${
                 isFavorite
                   ? "bg-rose-500 text-white hover:bg-rose-600"
-                  : "bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-200 hover:text-rose-500"
+                  : "bg-white dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-200 hover:text-rose-500"
               }`}
               title={isFavorite ? "Retirer de mes favoris" : "Ajouter à mes favoris"}
             >
@@ -307,55 +310,57 @@ export default function ProductCard({
                       : "text-emerald-950 dark:text-white"
                   }`}
                 >
-                  {formatCurrency(basePrice)}
+                  {formatCurrency(basePrice)} / unité
                 </span>
               </div>
             </div>
 
-            {/* 2. Prix de gros ou info boutique */}
+            {/* 2. Offre de quantité / Prix de gros */}
             {hasWholesale ? (
               <div
-                className={`p-2.5 sm:p-3 rounded-xl border transition-all shadow-2xs flex items-center justify-between gap-3 ${
+                className={`p-2.5 sm:p-3 rounded-xl border transition-all shadow-2xs flex flex-col gap-2 ${
                   isWholesaleActive
                     ? "bg-amber-500 text-white border-amber-600 shadow-xs"
                     : "bg-amber-50/95 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800/70 text-amber-900 dark:text-amber-100"
                 }`}
               >
-                <div className="flex flex-col">
+                <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span
-                      className={`text-[10px] font-black uppercase tracking-wider font-mono ${
-                        isWholesaleActive ? "text-amber-100" : "text-amber-800 dark:text-amber-300"
+                      className={`text-[10px] font-black uppercase tracking-wider font-mono px-1.5 py-0.5 rounded ${
+                        isWholesaleActive ? "bg-amber-700 text-white" : "bg-amber-200/80 text-amber-900 dark:bg-amber-900 dark:text-amber-200"
                       }`}
                     >
-                      Prix de gros
+                      OFFRE
                     </span>
-                    <span
-                      className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded leading-none font-mono ${
-                        isWholesaleActive
-                          ? "bg-amber-700 text-white"
-                          : "bg-amber-100 dark:bg-amber-900/90 text-amber-900 dark:text-amber-200 border border-amber-300/80 dark:border-amber-700/60"
-                      }`}
-                    >
-                      Dès {wholesaleMin} pcs
+                    <span className="text-xs font-black">
+                      {wholesaleMin} pour {formatCurrency(packPrice)}
                     </span>
                   </div>
                   <span
-                    className={`text-[9px] font-bold mt-0.5 ${
+                    className={`text-[9px] font-bold ${
                       isWholesaleActive ? "text-amber-100" : "text-amber-700 dark:text-amber-400"
                     }`}
                   >
-                    -{savingsPercent}% par article
+                    -{savingsPercent}%
                   </span>
                 </div>
-                <div className="text-right shrink-0">
-                  <span
-                    className={`font-mono font-black text-sm sm:text-base whitespace-nowrap block ${
-                      isWholesaleActive ? "text-white" : "text-amber-700 dark:text-amber-300"
-                    }`}
-                  >
-                    {formatCurrency(wholesalePrice)}
+                <div className="flex items-center justify-between text-[10px] font-semibold border-t border-amber-200/50 dark:border-amber-800/50 pt-1">
+                  <span className={isWholesaleActive ? "text-amber-100" : "text-amber-700 dark:text-amber-300"}>
+                    Soit {formatCurrency(Math.round(wholesalePrice))} / unité
                   </span>
+                  {!isWholesaleActive && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleJumpToWholesale();
+                      }}
+                      className="text-[9px] font-bold bg-amber-600 hover:bg-amber-700 text-white px-2 py-0.5 rounded shadow-2xs cursor-pointer transition-colors"
+                    >
+                      Profiter du pack →
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -388,84 +393,82 @@ export default function ProductCard({
           </div>
 
           {/* Interactive Wholesale Simulator Area */}
-          {product.stock > 0 && (
-            <div className="space-y-3 pt-1">
-              {/* Real-time low stock urgency banner */}
-              {product.stock < 5 && (
-                <div className="flex items-center space-x-2 px-3 py-2 rounded-xl bg-amber-500/15 dark:bg-amber-950/60 border border-amber-500/40 text-amber-900 dark:text-amber-200 text-[11px] font-bold shadow-2xs">
-                  <Flame className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 animate-pulse" />
-                  <span>
-                    ⚡ <strong>Stock limité :</strong> plus que <strong>{product.stock}</strong> exemplaire{product.stock > 1 ? "s" : ""} disponible{product.stock > 1 ? "s" : ""} !
+          <div className="space-y-3 pt-1">
+            {/* Real-time low stock urgency banner */}
+            {product.stock > 0 && product.stock < 5 && (
+              <div className="flex items-center space-x-2 px-3 py-2 rounded-xl bg-amber-500/15 dark:bg-amber-950/60 border border-amber-500/40 text-amber-900 dark:text-amber-200 text-[11px] font-bold shadow-2xs">
+                <Flame className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 animate-pulse" />
+                <span>
+                  ⚡ <strong>Stock limité :</strong> plus que <strong>{product.stock}</strong> exemplaire{product.stock > 1 ? "s" : ""} disponible{product.stock > 1 ? "s" : ""} !
+                </span>
+              </div>
+            )}
+
+            {/* Dynamic quantity select and summary */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase font-mono">Simuler la quantité :</span>
+              <div className="flex items-center space-x-1">
+                <button
+                  type="button"
+                  onClick={handleDecrement}
+                  disabled={qty <= 1}
+                  aria-label="Diminuer la quantité"
+                  className="w-7 h-7 bg-emerald-50 dark:bg-emerald-900 border border-emerald-100 dark:border-emerald-700 text-emerald-950 dark:text-white rounded-lg flex items-center justify-center font-bold text-xs hover:bg-emerald-100 dark:hover:bg-emerald-800 disabled:opacity-50 cursor-pointer"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  value={qty}
+                  onChange={handleQtyChange}
+                  min={1}
+                  max={maxAvailableStock}
+                  aria-label="Quantité souhaitée"
+                  className="w-10 h-7 bg-emerald-50 dark:bg-emerald-900 border border-emerald-100 dark:border-emerald-700 text-emerald-950 dark:text-white rounded-lg text-center text-xs font-bold"
+                />
+                <button
+                  type="button"
+                  onClick={handleIncrement}
+                  disabled={qty >= maxAvailableStock}
+                  aria-label="Augmenter la quantité"
+                  className="w-7 h-7 bg-emerald-50 dark:bg-emerald-900 border border-emerald-100 dark:border-emerald-700 text-emerald-950 dark:text-white rounded-lg flex items-center justify-center font-bold text-xs hover:bg-emerald-100 dark:hover:bg-emerald-800 disabled:opacity-50 cursor-pointer"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Real-time Dynamic bulk savings bar */}
+            {hasWholesale && (
+              <div className="space-y-1.5">
+                <div className="w-full bg-slate-100 dark:bg-emerald-900/80 rounded-full h-2 overflow-hidden border border-slate-200/50 dark:border-emerald-800">
+                  <div
+                    className={`h-full transition-all duration-500 rounded-full ${
+                      isWholesaleActive
+                        ? "bg-gradient-to-r from-amber-400 to-yellow-500 shadow-sm"
+                        : "bg-emerald-500"
+                    }`}
+                    style={{ width: `${progressPercent}%` }}
+                  ></div>
+                </div>
+                
+                <div className="flex justify-between items-center text-[9px] font-semibold">
+                  {isWholesaleActive ? (
+                    <span className="text-amber-600 dark:text-amber-400 font-extrabold flex items-center">
+                      🔥 Offre activée : {formatCurrency(totalSavings)} d'économie !
+                    </span>
+                  ) : (
+                    <span className="text-emerald-700 dark:text-emerald-300">
+                      Ajoutez <strong className="text-amber-600 dark:text-amber-400 font-bold">{wholesaleMin - qty} pcs</strong> pour l'offre à {formatCurrency(Math.round(wholesalePrice))}/u !
+                    </span>
+                  )}
+                  <span className="text-emerald-600 dark:text-emerald-400 font-mono">
+                    {qty}/{wholesaleMin} pcs
                   </span>
                 </div>
-              )}
-
-              {/* Dynamic quantity select and summary */}
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase font-mono">Simuler la quantité :</span>
-                <div className="flex items-center space-x-1">
-                  <button
-                    type="button"
-                    onClick={handleDecrement}
-                    disabled={qty <= 1}
-                    aria-label="Diminuer la quantité"
-                    className="w-7 h-7 bg-emerald-50 dark:bg-emerald-900 border border-emerald-100 dark:border-emerald-700 text-emerald-950 dark:text-white rounded-lg flex items-center justify-center font-bold text-xs hover:bg-emerald-100 dark:hover:bg-emerald-800 disabled:opacity-50 cursor-pointer"
-                  >
-                    -
-                  </button>
-                  <input
-                    type="number"
-                    value={qty}
-                    onChange={handleQtyChange}
-                    min={1}
-                    max={product.stock}
-                    aria-label="Quantité souhaitée"
-                    className="w-10 h-7 bg-emerald-50 dark:bg-emerald-900 border border-emerald-100 dark:border-emerald-700 text-emerald-950 dark:text-white rounded-lg text-center text-xs font-bold"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleIncrement}
-                    disabled={qty >= product.stock}
-                    aria-label="Augmenter la quantité"
-                    className="w-7 h-7 bg-emerald-50 dark:bg-emerald-900 border border-emerald-100 dark:border-emerald-700 text-emerald-950 dark:text-white rounded-lg flex items-center justify-center font-bold text-xs hover:bg-emerald-100 dark:hover:bg-emerald-800 disabled:opacity-50 cursor-pointer"
-                  >
-                    +
-                  </button>
-                </div>
               </div>
-
-              {/* Real-time Dynamic bulk savings bar */}
-              {hasWholesale && (
-                <div className="space-y-1.5">
-                  <div className="w-full bg-slate-100 dark:bg-emerald-900/80 rounded-full h-2 overflow-hidden border border-slate-200/50 dark:border-emerald-800">
-                    <div
-                      className={`h-full transition-all duration-500 rounded-full ${
-                        isWholesaleActive
-                          ? "bg-gradient-to-r from-amber-400 to-yellow-500 shadow-sm"
-                          : "bg-emerald-500"
-                      }`}
-                      style={{ width: `${progressPercent}%` }}
-                    ></div>
-                  </div>
-                  
-                  <div className="flex justify-between items-center text-[9px] font-semibold">
-                    {isWholesaleActive ? (
-                      <span className="text-amber-600 dark:text-amber-400 font-extrabold flex items-center">
-                        🔥 ÉCONOMIE DU GROS DE {formatCurrency(totalSavings)} !
-                      </span>
-                    ) : (
-                      <span className="text-emerald-700 dark:text-emerald-300">
-                        Ajoutez <strong className="text-amber-600 dark:text-amber-400 font-bold">{wholesaleMin - qty} pièces</strong> pour le prix de gros !
-                      </span>
-                    )}
-                    <span className="text-emerald-600 dark:text-emerald-400 font-mono">
-                      {qty}/{wholesaleMin} psc
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 

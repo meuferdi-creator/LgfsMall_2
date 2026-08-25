@@ -67,7 +67,11 @@ export default function LiveCommerce({ user, products, formatCurrency, onBuyProd
 
   useEffect(() => {
     fetchStreams();
-    const interval = setInterval(fetchStreams, 8000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchStreams();
+      }
+    }, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -76,6 +80,7 @@ export default function LiveCommerce({ user, products, formatCurrency, onBuyProd
     if (!activeStream) return;
 
     const fetchChat = async () => {
+      if (document.visibilityState !== "visible") return;
       try {
         const res = await fetch(`/api/livestreams/${activeStream.id}/messages`);
         if (res.ok) {
@@ -96,7 +101,7 @@ export default function LiveCommerce({ user, products, formatCurrency, onBuyProd
     };
 
     fetchChat();
-    const interval = setInterval(fetchChat, 3000);
+    const interval = setInterval(fetchChat, 5000);
     return () => clearInterval(interval);
   }, [activeStream]);
 
@@ -105,6 +110,7 @@ export default function LiveCommerce({ user, products, formatCurrency, onBuyProd
     if (!activeStream) return;
 
     const interval = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
       const randComment = mockComments[Math.floor(Math.random() * mockComments.length)];
       setChatMessages((prev) => [
         ...prev,
@@ -120,7 +126,7 @@ export default function LiveCommerce({ user, products, formatCurrency, onBuyProd
       if (Math.random() > 0.4) {
         spawnHeart();
       }
-    }, 4500);
+    }, 6000);
 
     return () => clearInterval(interval);
   }, [activeStream]);
@@ -346,12 +352,12 @@ export default function LiveCommerce({ user, products, formatCurrency, onBuyProd
                       <span>En Direct</span>
                     </div>
 
-                    <div className="absolute top-3 right-3 bg-emerald-950/80 backdrop-blur-sm text-emerald-300 text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center space-x-1">
+                    <div className="absolute top-3 right-3 bg-emerald-950/90 text-emerald-300 text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center space-x-1 shadow-sm">
                       <Users className="w-3 h-3 text-emerald-400" />
                       <span>{str.viewers} spectateurs</span>
                     </div>
 
-                    <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20 group-hover:scale-110 transition-transform z-10">
+                    <div className="w-10 h-10 bg-white/25 rounded-full flex items-center justify-center border border-white/20 group-hover:scale-110 transition-transform z-10">
                       <Tv className="w-5 h-5 text-white" />
                     </div>
                   </div>
@@ -401,7 +407,7 @@ export default function LiveCommerce({ user, products, formatCurrency, onBuyProd
               </div>
 
               <div className="flex items-center space-x-2">
-                <span className="bg-emerald-900/80 backdrop-blur-sm text-emerald-300 text-[10px] font-bold px-3 py-1 rounded-xl flex items-center space-x-1 border border-emerald-800">
+                <span className="bg-emerald-950/90 text-emerald-300 text-[10px] font-bold px-3 py-1 rounded-xl flex items-center space-x-1 border border-emerald-800 shadow-sm">
                   <Users className="w-3.5 h-3.5 text-emerald-400" />
                   <span>{activeStream.viewers} spectateurs</span>
                 </span>
@@ -447,7 +453,7 @@ export default function LiveCommerce({ user, products, formatCurrency, onBuyProd
             </div>
 
             {/* Featured product floating card */}
-            <div className="z-10 bg-white/15 backdrop-blur-md border border-white/10 rounded-2xl p-3 flex items-center justify-between gap-3 max-w-md">
+            <div className="z-10 bg-slate-900/90 border border-white/20 rounded-2xl p-3 flex items-center justify-between gap-3 max-w-md shadow-xl">
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-12 bg-emerald-950 rounded-xl overflow-hidden border border-white/10 flex-shrink-0">
                   <img 

@@ -147,7 +147,7 @@ export default function HomePageSections({
         
         <div className="bg-emerald-700 bg-linear-to-br from-emerald-600 to-emerald-800 text-white p-6 rounded-2xl shadow-md border border-emerald-500/30 space-y-3 flex flex-col justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white shrink-0">
               <ShieldCheck className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -162,7 +162,7 @@ export default function HomePageSections({
 
         <div className="bg-amber-600 bg-linear-to-br from-amber-500 to-amber-700 text-white p-6 rounded-2xl shadow-md border border-amber-400/30 space-y-3 flex flex-col justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white shrink-0">
               <Truck className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -177,7 +177,7 @@ export default function HomePageSections({
 
         <div className="bg-slate-900 bg-linear-to-br from-slate-800 to-slate-950 text-white p-6 rounded-2xl shadow-md border border-slate-700 space-y-3 flex flex-col justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white shrink-0">
               <Palette className="w-5 h-5 text-white" />
             </div>
             <div>

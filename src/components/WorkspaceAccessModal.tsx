@@ -65,9 +65,14 @@ export const WorkspaceAccessModal: React.FC<WorkspaceAccessModalProps> = ({
     return (
       <div 
         id="workspace-forbidden-modal"
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
       >
-        <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-rose-100 dark:border-rose-900/40 relative space-y-6 text-slate-900 dark:text-slate-100">
+        <div 
+          className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+          onClick={onClose} 
+          aria-hidden="true" 
+        />
+        <div className="relative z-10 bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-rose-100 dark:border-rose-900/40 space-y-6 text-slate-900 dark:text-slate-100 animate-scale-in">
           
           {/* Close Button */}
           <button
@@ -130,9 +135,14 @@ export const WorkspaceAccessModal: React.FC<WorkspaceAccessModalProps> = ({
     return (
       <div 
         id="workspace-unauth-modal"
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
       >
-        <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 relative space-y-6 text-slate-900 dark:text-slate-100">
+        <div 
+          className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+          onClick={onClose} 
+          aria-hidden="true" 
+        />
+        <div className="relative z-10 bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-6 text-slate-900 dark:text-slate-100 animate-scale-in">
           <button
             type="button"
             onClick={onClose}
@@ -234,9 +244,14 @@ export const WorkspaceAccessModal: React.FC<WorkspaceAccessModalProps> = ({
   return (
     <div 
       id="workspace-onboarding-modal"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
     >
-      <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-emerald-100 dark:border-emerald-900/40 relative space-y-6 text-slate-900 dark:text-slate-100">
+      <div 
+        className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+        onClick={onClose} 
+        aria-hidden="true" 
+      />
+      <div className="relative z-10 bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-emerald-100 dark:border-emerald-900/40 space-y-6 text-slate-900 dark:text-slate-100 animate-scale-in">
         
         {/* Close Button */}
         <button

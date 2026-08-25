@@ -85,9 +85,15 @@ export default function StoreModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+      {/* Backdrop */}
       <div 
-        className="bg-white dark:bg-emerald-950 w-full max-w-5xl rounded-3xl shadow-2xl border border-emerald-100 dark:border-emerald-800 overflow-hidden flex flex-col max-h-[90vh]"
+        className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+        onClick={onClose} 
+        aria-hidden="true" 
+      />
+      <div 
+        className="relative z-10 bg-white dark:bg-emerald-950 w-full max-w-5xl rounded-3xl shadow-2xl border border-emerald-100 dark:border-emerald-800 overflow-hidden flex flex-col max-h-[90vh] animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Banner */}
@@ -111,7 +117,7 @@ export default function StoreModal({
           </div>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-6">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center text-amber-400 border border-white/20 shrink-0">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/15 rounded-2xl flex items-center justify-center text-amber-400 border border-white/20 shrink-0">
               <Store className="w-10 h-10 stroke-[1.5]" />
             </div>
 

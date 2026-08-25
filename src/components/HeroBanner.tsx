@@ -94,7 +94,7 @@ export default function HeroBanner({ onSelectCategory, onOpenFlashDeals }: HeroB
         
         {/* Top Badge */}
         <div className="flex items-center space-x-3">
-          <span className="inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-black bg-emerald-600/90 text-white backdrop-blur-md border border-emerald-400/30 uppercase tracking-wider shadow-md">
+          <span className="inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-black bg-emerald-700 text-white border border-emerald-400/30 uppercase tracking-wider shadow-md">
             {slide.badgeIcon}
             {slide.badge}
           </span>
@@ -123,7 +123,7 @@ export default function HeroBanner({ onSelectCategory, onOpenFlashDeals }: HeroB
             </button>
             <button
               onClick={() => onSelectCategory ? onSelectCategory("Électronique") : null}
-              className="bg-white/10 hover:bg-white/20 text-white backdrop-blur-md px-6 py-3.5 rounded-2xl text-xs sm:text-sm font-bold transition-all border border-white/20 flex items-center space-x-2 cursor-pointer active:scale-95"
+              className="bg-white/15 hover:bg-white/25 text-white px-6 py-3.5 rounded-2xl text-xs sm:text-sm font-bold transition-all border border-white/20 flex items-center space-x-2 cursor-pointer active:scale-95"
             >
               <Smartphone className="w-4 h-4" />
               <span>{slide.secondaryBtnText || t.exploreMarketplace}</span>
@@ -173,14 +173,14 @@ export default function HeroBanner({ onSelectCategory, onOpenFlashDeals }: HeroB
       {/* Navigation Arrows */}
       <button
         onClick={handlePrev}
-        className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/60 text-white backdrop-blur-md flex items-center justify-center opacity-80 hover:opacity-100 hover:bg-slate-900 transition-all border border-white/20 cursor-pointer z-20"
+        className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/80 text-white flex items-center justify-center opacity-80 hover:opacity-100 hover:bg-slate-900 transition-all border border-white/20 cursor-pointer z-20"
         title={t.back}
       >
         <ChevronLeft className="w-5 h-5" />
       </button>
       <button
         onClick={handleNext}
-        className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/60 text-white backdrop-blur-md flex items-center justify-center opacity-80 hover:opacity-100 hover:bg-slate-900 transition-all border border-white/20 cursor-pointer z-20"
+        className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/80 text-white flex items-center justify-center opacity-80 hover:opacity-100 hover:bg-slate-900 transition-all border border-white/20 cursor-pointer z-20"
         title="Suivant"
       >
         <ChevronRight className="w-5 h-5" />

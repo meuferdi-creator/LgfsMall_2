@@ -158,8 +158,13 @@ export default function OnboardingModal({ isOpen, onClose, lang }: OnboardingMod
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-fade-in">
-      <div className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-emerald-100 overflow-hidden text-slate-800">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div 
+        className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+        onClick={onClose} 
+        aria-hidden="true" 
+      />
+      <div className="relative z-10 w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-emerald-100 overflow-hidden text-slate-800 animate-scale-in">
         {/* Header bar */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-emerald-900 text-white">
           <div className="flex items-center space-x-2">

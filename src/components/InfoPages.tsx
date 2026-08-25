@@ -579,6 +579,67 @@ export default function InfoPages({
           </div>
         );
 
+      // 12. CONTACT & SUPPORT DIRECT
+      case "contact":
+        return (
+          <div className="space-y-10">
+            <div className="bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 text-white rounded-3xl p-8 sm:p-12 shadow-xl border border-emerald-800/50 space-y-4">
+              <span className="text-xs font-mono font-extrabold text-emerald-400 uppercase tracking-widest block">
+                Contact & Assistance 7j/7
+              </span>
+              <h1 className="text-3xl sm:text-5xl font-black font-display tracking-tight">
+                Contactez l'Équipe LGF's Mall
+              </h1>
+              <p className="text-sm sm:text-base text-slate-300 max-w-2xl font-medium leading-relaxed">
+                Une question sur une commande, un paiement Mobile Money ou un partenariat ? Nos conseillers basés à Lomé sont à votre écoute.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 flex items-center justify-center font-bold">
+                  <MessageSquare className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white font-display">Support WhatsApp 🟢</h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">Assistance instantanée 7j/7 de 7h30 à 22h00.</p>
+                <button
+                  type="button"
+                  onClick={() => openTicket("Assistance Contact Direct WhatsApp")}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span>Ouvrir WhatsApp</span>
+                </button>
+              </div>
+
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-400 flex items-center justify-center font-bold">
+                  <Mail className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white font-display">Email Officiel</h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">Pour demandes commerciales, partenariats et presse.</p>
+                <a
+                  href="mailto:lgfmall.lmdg11@gmail.com"
+                  className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-900 dark:text-white font-extrabold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer block text-center truncate"
+                >
+                  lgfmall.lmdg11@gmail.com
+                </a>
+              </div>
+
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-400 flex items-center justify-center font-bold">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white font-display">Siège & Hub Lomé</h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">Boulevard du Mono, Grand Lomé, République Togolaise.</p>
+                <div className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                  Lundi - Samedi : 08h00 - 18h30
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
       // LEGAL: TERMS, PRIVACY, COOKIES
       case "terms":
       case "privacy":
@@ -615,8 +676,42 @@ export default function InfoPages({
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 pb-16 animate-in fade-in duration-300">
       {renderHeader(slug.toUpperCase(), "Page d'information")}
       
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-10 space-y-10">
         {renderContent()}
+
+        {/* Global Quick Action Navigation Bar on all Info Pages */}
+        <div className="pt-6 border-t border-slate-200 dark:border-slate-800">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <button
+              type="button"
+              onClick={onNavigateHome}
+              className="p-4 bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-slate-200 dark:border-slate-800 rounded-2xl transition-all cursor-pointer text-xs font-extrabold text-slate-900 dark:text-white"
+            >
+              🏪 Retour Marketplace
+            </button>
+            <button
+              type="button"
+              onClick={onNavigateHelp}
+              className="p-4 bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-slate-200 dark:border-slate-800 rounded-2xl transition-all cursor-pointer text-xs font-extrabold text-slate-900 dark:text-white"
+            >
+              ❓ Centre d'Aide & FAQ
+            </button>
+            <button
+              type="button"
+              onClick={onOpenTrackOrders}
+              className="p-4 bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-slate-200 dark:border-slate-800 rounded-2xl transition-all cursor-pointer text-xs font-extrabold text-slate-900 dark:text-white"
+            >
+              🚚 Suivre ma commande
+            </button>
+            <button
+              type="button"
+              onClick={onOpenVendorPortal}
+              className="p-4 bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border border-slate-200 dark:border-slate-800 rounded-2xl transition-all cursor-pointer text-xs font-extrabold text-slate-900 dark:text-white"
+            >
+              🏬 Espace Vendeur
+            </button>
+          </div>
+        </div>
       </main>
 
       <SupportTicketModal

@@ -405,8 +405,13 @@ export default function KycDocumentUploader({
 
       {/* Fullscreen Image Preview Modal */}
       {showFullPreview && value && !fileInfo?.isPdf && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-emerald-950 border border-slate-200 dark:border-emerald-800 rounded-3xl max-w-2xl w-full p-5 shadow-2xl space-y-4 relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div 
+            className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+            onClick={() => setShowFullPreview(false)} 
+            aria-hidden="true" 
+          />
+          <div className="relative z-10 bg-white dark:bg-emerald-950 border border-slate-200 dark:border-emerald-800 rounded-3xl max-w-2xl w-full p-5 shadow-2xl space-y-4 animate-scale-in">
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-emerald-800 pb-3">
               <div className="flex items-center space-x-2">
                 <ImageIcon className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />

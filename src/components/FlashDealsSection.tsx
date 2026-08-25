@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { Zap, Clock, ShoppingCart, Eye, Star, Flame, Store } from "lucide-react";
 import { Product } from "../types";
 import { getOptimizedImageUrl } from "../utils/imageOptimizer";
@@ -20,26 +20,6 @@ export default function FlashDealsSection({
   const { t } = useTranslation();
   // Live countdown timer state (e.g. 14h : 28m : 45s)
   const [timeLeft, setTimeLeft] = useState({ hours: 14, minutes: 28, seconds: 45 });
-
-  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartPos.current = {
-      x: e.touches[0].clientX,
-      y: e.touches[0].clientY,
-    };
-  };
-
-  const createTouchEndHandler = (product: Product) => (e: React.TouchEvent) => {
-    if (!touchStartPos.current) return;
-    const touchEnd = e.changedTouches[0];
-    const dx = Math.abs(touchEnd.clientX - touchStartPos.current.x);
-    const dy = Math.abs(touchEnd.clientY - touchStartPos.current.y);
-    if (dx < 10 && dy < 10) {
-      onOpenDetail(product);
-    }
-    touchStartPos.current = null;
-  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -116,43 +96,68 @@ export default function FlashDealsSection({
               className="bg-white dark:bg-emerald-950 rounded-2xl border border-slate-200 dark:border-emerald-800/60 p-4 shadow-md hover:shadow-xl transition-all duration-300 group flex flex-col justify-between relative"
             >
               {/* Discount Badge */}
-              <div className="absolute top-3 left-3 z-10 bg-rose-600 text-white font-black text-[10px] px-2.5 py-1 rounded-full shadow-md font-mono">
+              <div className="absolute top-3 left-3 z-10 bg-rose-600 text-white font-black text-[10px] px-2.5 py-1 rounded-full shadow-md font-mono pointer-events-none">
                 -{fakeDiscountPercent}%
               </div>
 
-              {/* Product Image */}
+              {/* Product Image - Clickable & Ultra-Responsive */}
               <div 
-                className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 dark:bg-emerald-900/40 mb-3 cursor-pointer" 
-                onClick={() => onOpenDetail(p)}
-                onTouchStart={handleTouchStart}
-                onTouchEnd={createTouchEndHandler(p)}
+                className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 dark:bg-emerald-900/40 mb-3 cursor-pointer group/img select-none active:opacity-90" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  onOpenDetail(p);
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Voir les détails de ${p.title}`}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onOpenDetail(p);
+                  }
+                }}
               >
                 <img
                   src={getOptimizedImageUrl(p.image, 400, 70)}
                   alt={p.title}
                   loading="lazy"
                   decoding="async"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
                 />
+                
+                {/* Overlay Hint on Hover / Touch */}
+                <div className="absolute inset-0 bg-black/10 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                  <span className="bg-slate-950/85 text-white text-[11px] font-bold px-3 py-1.5 rounded-full shadow-md flex items-center space-x-1.5 border border-white/10">
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Détails</span>
+                  </span>
+                </div>
+
+                {/* Floating Preview Button */}
                 <button
-                  onClick={(e) => { e.stopPropagation(); onOpenDetail(p); }}
-                  className="absolute bottom-2 right-2 bg-white/90 dark:bg-slate-900/90 text-slate-800 dark:text-white p-2 rounded-xl shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110"
-                  title="Aperçu rapide"
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenDetail(p);
+                  }}
+                  className="absolute bottom-2 right-2 bg-white/95 dark:bg-slate-900/95 text-slate-800 dark:text-white p-2.5 rounded-xl shadow-lg opacity-90 sm:opacity-0 group-hover/img:opacity-100 transition-all hover:scale-110 cursor-pointer border border-slate-200 dark:border-slate-700 active:scale-95"
+                  title="Voir les détails"
+                  aria-label="Voir les détails"
                 >
-                  <Eye className="w-4 h-4" />
+                  <Eye className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 </button>
               </div>
 
               {/* Title, Category & Store Name */}
-              <div className="space-y-1 mb-3">
+              <div 
+                className="space-y-1 mb-3 cursor-pointer"
+                onClick={() => onOpenDetail(p)}
+              >
                 <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 font-mono uppercase">
                   {p.category}
                 </span>
                 <h4 
-                  onClick={() => onOpenDetail(p)}
-                  onTouchStart={handleTouchStart}
-                  onTouchEnd={createTouchEndHandler(p)}
-                  className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white line-clamp-2 hover:text-emerald-600 cursor-pointer font-display leading-snug"
+                  className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white line-clamp-2 hover:text-emerald-600 cursor-pointer font-display leading-snug transition-colors"
                 >
                   {p.title}
                 </h4>
@@ -189,6 +194,7 @@ export default function FlashDealsSection({
 
                 {/* Buy Button */}
                 <button
+                  type="button"
                   onClick={() => onBuy(p.id, 1)}
                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-2.5 rounded-xl text-xs transition-all shadow-md shadow-emerald-600/10 flex items-center justify-center space-x-2 cursor-pointer active:scale-95"
                 >

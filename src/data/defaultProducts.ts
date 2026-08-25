@@ -93,5 +93,125 @@ export const DEFAULT_CATALOG_PRODUCTS: Product[] = [
       email: "lgfmall.lmdg11@gmail.com",
       role: "ADMIN"
     }
+  },
+  {
+    id: "masque-visage-lgf",
+    title: "Masque visage",
+    description: "Masque visage destiné aux soins et à l’entretien de la peau.\n\nTarification :\n• 1 unité : 300 FCFA\n• Pack de 5 : 1 000 FCFA",
+    price: 300,
+    wholesalePrice: 200,
+    wholesaleMinQty: 5,
+    category: "Beauté & Santé",
+    stock: 250,
+    vendorId: "official-boutique",
+    image: "https://i.ibb.co/M5gckLYG/Masque-visage-1.jpg",
+    images: [
+      "https://i.ibb.co/M5gckLYG/Masque-visage-1.jpg",
+      "https://i.ibb.co/XfLYSsd0/Masque-visage-2.jpg",
+      "https://i.ibb.co/LDvGkFpW/Masque-visage-3.jpg",
+      "https://i.ibb.co/qYd2hX9d/Masque-visage-4.jpg",
+      "https://i.ibb.co/84dm0Jsf/Masque-visage-5.jpg",
+      "https://i.ibb.co/xtG1SfPw/Masque-visage-6.jpg"
+    ],
+    vendor: {
+      id: "official-boutique",
+      name: "LGF's Mall",
+      email: "lgfmall.lmdg11@gmail.com",
+      role: "ADMIN"
+    }
+  },
+  {
+    id: "lubrifiant-lgf",
+    title: "Lubrifiant",
+    description: "Lubrifiant destiné à l’hygiène et au bien-être intime.\n\nTarification :\n• 1 unité : 700 FCFA\n• Pack de 3 : 1 500 FCFA",
+    price: 700,
+    wholesalePrice: 500,
+    wholesaleMinQty: 3,
+    category: "Beauté & Santé",
+    stock: 180,
+    vendorId: "official-boutique",
+    image: "https://i.ibb.co/60SHNbC2/lubrifiant-1.jpg",
+    images: [
+      "https://i.ibb.co/60SHNbC2/lubrifiant-1.jpg",
+      "https://i.ibb.co/KxM1X4zB/lubrifiant-2.jpg",
+      "https://i.ibb.co/qMK2TCQJ/lubrifiant-3.jpg"
+    ],
+    vendor: {
+      id: "official-boutique",
+      name: "LGF's Mall",
+      email: "lgfmall.lmdg11@gmail.com",
+      role: "ADMIN"
+    }
+  },
+  {
+    id: "mini-lubrifiant-lgf",
+    title: "Mini lubrifiant",
+    description: "Mini lubrifiant pratique, format compact.\n\nTarification :\n• 1 unité : 100 FCFA\n• Pack de 3 : 250 FCFA",
+    price: 100,
+    wholesalePrice: 83.33333333333333,
+    wholesaleMinQty: 3,
+    category: "Beauté & Santé",
+    stock: 350,
+    vendorId: "official-boutique",
+    image: "https://i.ibb.co/rfdFWv92/mini-lubrif-1.jpg",
+    images: [
+      "https://i.ibb.co/rfdFWv92/mini-lubrif-1.jpg",
+      "https://i.ibb.co/whGcKt4D/mini-lubrif-2.jpg"
+    ],
+    vendor: {
+      id: "official-boutique",
+      name: "LGF's Mall",
+      email: "lgfmall.lmdg11@gmail.com",
+      role: "ADMIN"
+    }
+  },
+  {
+    id: "creme-a-main-lgf",
+    title: "Crème à main",
+    description: "Crème à main destinée à hydrater et prendre soin des mains.\n\nTarification :\n• 1 unité : 500 FCFA\n• À partir de 3 unités : 1 200 FCFA",
+    price: 500,
+    wholesalePrice: 400,
+    wholesaleMinQty: 3,
+    category: "Beauté & Santé",
+    stock: 200,
+    vendorId: "official-boutique",
+    image: "https://i.ibb.co/trvyLvk/creme-main-1.jpg",
+    images: [
+      "https://i.ibb.co/trvyLvk/creme-main-1.jpg",
+      "https://i.ibb.co/tTsPZsNr/creme-main-2.jpg",
+      "https://i.ibb.co/CKLC0xy0/creme-main-3.jpg",
+      "https://i.ibb.co/fzK6vfZv/creme-main-4.jpg"
+    ],
+    vendor: {
+      id: "official-boutique",
+      name: "LGF's Mall",
+      email: "lgfmall.lmdg11@gmail.com",
+      role: "ADMIN"
+    }
+  },
+  {
+    id: "parfum-de-bouche-lgf",
+    title: "Parfum de bouche",
+    description: "Parfum de bouche pour une sensation de fraîcheur et une bonne hygiène bucco-dentaire.\n\nTarification :\n• 1 unité : 1 000 FCFA\n• À partir de 2 unités : 1 500 FCFA",
+    price: 1000,
+    wholesalePrice: 750,
+    wholesaleMinQty: 2,
+    category: "Beauté & Santé",
+    stock: 150,
+    vendorId: "official-boutique",
+    image: "https://i.ibb.co/ZpN04QMt/spray1.jpg",
+    images: [
+      "https://i.ibb.co/ZpN04QMt/spray1.jpg",
+      "https://i.ibb.co/237LWjjm/spray2.jpg",
+      "https://i.ibb.co/b56bdxmb/spray3.jpg",
+      "https://i.ibb.co/PzNZ3LFG/spray4.jpg",
+      "https://i.ibb.co/jZ128k8w/spray5.png"
+    ],
+    vendor: {
+      id: "official-boutique",
+      name: "LGF's Mall",
+      email: "lgfmall.lmdg11@gmail.com",
+      role: "ADMIN"
+    }
   }
 ];

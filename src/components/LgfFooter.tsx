@@ -255,7 +255,7 @@ export default function LgfFooter({
 
           {/* COPYRIGHT & LEGAL LINKS */}
           <div className={`mt-8 pt-6 border-t ${isDark ? "border-emerald-900/60" : "border-slate-100"} flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-emerald-200 font-medium`}>
-            <p>© 2026 LGF's Mall. Tous droits réservés.</p>
+            <p>© {new Date().getFullYear()} LGF's Mall. Tous droits réservés.</p>
 
             <div className="flex flex-wrap items-center justify-center gap-1.5 text-[10px] font-mono font-medium text-slate-600 dark:text-emerald-100">
               <span className="px-2.5 py-0.5 rounded-md bg-slate-50 dark:bg-emerald-900/80 border border-slate-200/80 dark:border-emerald-700">Moov Money</span>

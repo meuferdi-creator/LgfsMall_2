@@ -254,8 +254,13 @@ export default function WorkspaceOnboardingTour({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-emerald-950 border border-slate-200 dark:border-emerald-800 rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl relative overflow-hidden transition-all transform animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div 
+        className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+        onClick={handleDismiss} 
+        aria-hidden="true" 
+      />
+      <div className="relative z-10 bg-white dark:bg-emerald-950 border border-slate-200 dark:border-emerald-800 rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl relative overflow-hidden transition-all transform animate-in zoom-in-95 duration-200">
         
         {/* Top Header Background Glow */}
         <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-400/15 dark:bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />

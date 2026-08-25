@@ -650,8 +650,13 @@ export default function BuyerPortal({
 
       {/* Confirmation Modal */}
       {showOrderModal && selectedProd && (
-        <div className="fixed inset-0 bg-emerald-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 border border-emerald-100 shadow-2xl text-emerald-950 space-y-5 my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div 
+            className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+            onClick={() => setShowOrderModal(false)} 
+            aria-hidden="true" 
+          />
+          <div className="relative z-10 bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 border border-emerald-100 shadow-2xl text-emerald-950 space-y-5 my-8 animate-scale-in">
             <div className="text-center space-y-2">
               <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto border border-emerald-100 shadow-sm">
                 <Lock className="w-6 h-6" />

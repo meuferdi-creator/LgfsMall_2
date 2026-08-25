@@ -864,8 +864,13 @@ export default function AdminPortal({
 
           {/* FLASH DEAL CONFIGURATION MODAL */}
           {selectedFlashProduct && (
-            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-              <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden border border-slate-200 shadow-2xl space-y-4 p-6 animate-scale-in text-slate-800">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+              <div 
+                className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+                onClick={() => setSelectedFlashProduct(null)} 
+                aria-hidden="true" 
+              />
+              <div className="relative z-10 bg-white rounded-3xl max-w-md w-full overflow-hidden border border-slate-200 shadow-2xl space-y-4 p-6 animate-scale-in text-slate-800">
                 <div className="flex justify-between items-center pb-3 border-b border-slate-100">
                   <div className="flex items-center space-x-2">
                     <Flame className="w-5 h-5 text-amber-500 fill-amber-500" />
@@ -1146,8 +1151,13 @@ export default function AdminPortal({
         </div>
       )}
       {selectedUserForDetail && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden border border-slate-200 shadow-2xl flex flex-col my-8 animate-scale-in text-slate-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div 
+            className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+            onClick={() => setSelectedUserForDetail(null)} 
+            aria-hidden="true" 
+          />
+          <div className="relative z-10 bg-white rounded-3xl max-w-lg w-full overflow-hidden border border-slate-200 shadow-2xl flex flex-col my-8 animate-scale-in text-slate-800">
             {/* Modal Header */}
             <div className="bg-emerald-950 text-white p-5 flex items-center justify-between">
               <div className="flex items-center space-x-3">

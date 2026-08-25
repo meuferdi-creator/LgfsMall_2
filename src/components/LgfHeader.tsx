@@ -50,6 +50,7 @@ interface LgfHeaderProps {
   onOpenFlashDeals?: () => void;
   onOpenVendorPortal?: () => void;
   onOpenTrackOrders?: () => void;
+  onNavigate?: (route: string) => void;
   logout: () => void;
   formatCurrency: (amount: number) => string;
   activePortalRole?: UserRole;
@@ -90,6 +91,7 @@ export default function LgfHeader({
   onOpenFlashDeals,
   onOpenVendorPortal,
   onOpenTrackOrders,
+  onNavigate,
   logout,
   formatCurrency,
   activePortalRole,
@@ -117,10 +119,15 @@ export default function LgfHeader({
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const catalogEl = document.getElementById("public-catalog") || document.getElementById("buyer-portal");
-    if (catalogEl) {
-      catalogEl.scrollIntoView({ behavior: "smooth" });
+    if (onNavigate) {
+      onNavigate("home");
     }
+    setTimeout(() => {
+      const catalogEl = document.getElementById("public-catalog") || document.getElementById("buyer-portal");
+      if (catalogEl) {
+        catalogEl.scrollIntoView({ behavior: "smooth" });
+      }
+    }, 50);
   };
 
   return (
@@ -214,7 +221,19 @@ export default function LgfHeader({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-3 sm:gap-6">
         
         {/* Brand Logo */}
-        <div className="flex items-center space-x-3 shrink-0 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+        <button
+          type="button"
+          aria-label="LGF's Mall - Retour à l'accueil"
+          onClick={() => {
+            if (onNavigate) {
+              onNavigate("home");
+            } else {
+              window.location.hash = "#home";
+            }
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          className="flex items-center space-x-3 shrink-0 cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-xl"
+        >
           <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-emerald-600 flex items-center justify-center text-white font-black text-xl shadow-md border-2 border-yellow-400 shrink-0 font-display">
             L
           </div>
@@ -226,7 +245,7 @@ export default function LgfHeader({
               LE MARCHÉ AFRICAIN
             </span>
           </div>
-        </div>
+        </button>
 
         {/* Search Bar (Centered, with Voice/Photo icons and Green Button) */}
         <form onSubmit={handleSearchSubmit} className="flex-1 max-w-2xl relative hidden sm:flex items-center">
@@ -435,8 +454,11 @@ export default function LgfHeader({
                               title={tooltipText}
                               onClick={() => {
                                 setShowUserMenu(false);
+                                if (onNavigate) {
+                                  onNavigate("home");
+                                }
                                 if (accessCheck.hasAccess) {
-                                  onChangePortalRole(item.role);
+                                  onChangePortalRole?.(item.role);
                                 } else {
                                   onWorkspaceAccessDenied?.(item.role, accessCheck.reason);
                                 }
@@ -565,7 +587,7 @@ export default function LgfHeader({
               <>
                 {/* Transparent backdrop overlay on screen to close dropdown on tap outside */}
                 <div 
-                  className="fixed inset-0 z-[90] bg-slate-950/20 backdrop-blur-[1px]" 
+                  className="fixed inset-0 z-[90] bg-slate-950/20" 
                   onClick={() => setShowCategoryDropdown(false)} 
                 />
 
@@ -577,8 +599,13 @@ export default function LgfHeader({
                       onClick={() => {
                         setSelectedCategory(cat);
                         setShowCategoryDropdown(false);
-                        const catEl = document.getElementById("catalog-section") || document.getElementById("public-catalog") || document.getElementById("buyer-portal");
-                        if (catEl) catEl.scrollIntoView({ behavior: "smooth" });
+                        if (onNavigate) {
+                          onNavigate("home");
+                        }
+                        setTimeout(() => {
+                          const catEl = document.getElementById("catalog-section") || document.getElementById("public-catalog") || document.getElementById("buyer-portal");
+                          if (catEl) catEl.scrollIntoView({ behavior: "smooth" });
+                        }, 50);
                       }}
                       className={`w-full text-left px-3.5 py-2.5 rounded-xl font-extrabold transition-all flex items-center justify-between cursor-pointer ${
                         selectedCategory === cat
@@ -602,8 +629,13 @@ export default function LgfHeader({
                 key={cat}
                 onClick={() => {
                   setSelectedCategory(cat);
-                  const catEl = document.getElementById("catalog-section") || document.getElementById("public-catalog") || document.getElementById("buyer-portal");
-                  if (catEl) catEl.scrollIntoView({ behavior: "smooth" });
+                  if (onNavigate) {
+                    onNavigate("home");
+                  }
+                  setTimeout(() => {
+                    const catEl = document.getElementById("catalog-section") || document.getElementById("public-catalog") || document.getElementById("buyer-portal");
+                    if (catEl) catEl.scrollIntoView({ behavior: "smooth" });
+                  }, 50);
                 }}
                 className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
                   selectedCategory === cat
@@ -621,7 +653,12 @@ export default function LgfHeader({
         {/* Right Quick Action Shortcuts */}
         <div className="flex items-center space-x-3 shrink-0 whitespace-nowrap text-xs font-black">
           <button
-            onClick={() => onOpenFlashDeals ? onOpenFlashDeals() : null}
+            onClick={() => {
+              if (onNavigate) onNavigate("home");
+              setTimeout(() => {
+                if (onOpenFlashDeals) onOpenFlashDeals();
+              }, 50);
+            }}
             className="flex items-center space-x-1 text-amber-950 dark:text-amber-300 hover:underline cursor-pointer bg-amber-400/20 dark:bg-amber-950/80 px-3 py-1 rounded-xl border border-amber-400/60 dark:border-amber-700 shadow-2xs"
           >
             <Tag className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
@@ -629,7 +666,10 @@ export default function LgfHeader({
           </button>
 
           <button
-            onClick={() => onOpenVendorPortal ? onOpenVendorPortal() : null}
+            onClick={() => {
+              if (onNavigate) onNavigate("home");
+              if (onOpenVendorPortal) onOpenVendorPortal();
+            }}
             className="flex items-center space-x-1 text-slate-900 dark:text-emerald-100 hover:text-emerald-700 dark:hover:text-amber-300 cursor-pointer"
           >
             <Store className="w-3.5 h-3.5 text-emerald-600" />
@@ -637,7 +677,9 @@ export default function LgfHeader({
           </button>
 
           <button
-            onClick={() => onOpenTrackOrders ? onOpenTrackOrders() : null}
+            onClick={() => {
+              if (onOpenTrackOrders) onOpenTrackOrders();
+            }}
             className="hidden sm:flex items-center space-x-1 text-slate-900 dark:text-emerald-100 hover:text-emerald-700 dark:hover:text-amber-300 cursor-pointer"
           >
             <Truck className="w-3.5 h-3.5 text-emerald-600" />

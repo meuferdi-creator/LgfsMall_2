@@ -584,16 +584,30 @@ export default function InvestorPortal({
                         <Clock className="w-3.5 h-3.5 mr-1" />
                         Date d'échéance estimée : {matureDate.toLocaleDateString("fr-FR")}
                       </span>
-                      <a 
-                        href="#" 
-                        onClick={(e) => {
-                          e.preventDefault();
-                          alert("Téléchargement du reçu de certificat légal visé séquestre LGF.");
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          const blob = new Blob([
+                            `LGF'S MALL - CERTIFICAT OFFICIEL D'INVESTISSEMENT\n` +
+                            `--------------------------------------------------\n` +
+                            `Numéro de contrat : #${inv.id.toUpperCase().slice(0, 10)}\n` +
+                            `Montant investi : ${inv.amount} FCFA\n` +
+                            `Taux ROI : ${inv.roi}%\n` +
+                            `Garantie Séquestre : Validée\n` +
+                            `Date d'échéance : ${matureDate.toLocaleDateString("fr-FR")}\n` +
+                            `Émis par LGF's Mall Lomé, Togo.`
+                          ], { type: "text/plain;charset=utf-8" });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = `certificat_invest_${inv.id || 'lgf'}.txt`;
+                          a.click();
+                          URL.revokeObjectURL(url);
                         }}
-                        className="text-emerald-700 underline font-bold hover:text-emerald-900"
+                        className="text-emerald-700 underline font-bold hover:text-emerald-900 cursor-pointer"
                       >
-                        Télécharger le Certificat de Dépôt Actif (PDF)
-                      </a>
+                        Télécharger le Certificat de Dépôt Actif
+                      </button>
                     </div>
                   </div>
                 );

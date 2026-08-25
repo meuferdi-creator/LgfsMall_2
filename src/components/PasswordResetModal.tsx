@@ -118,14 +118,21 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="reset-modal-title"
     >
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+        onClick={onClose} 
+        aria-hidden="true" 
+      />
+
       {/* Modal Container */}
       <div 
-        className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-emerald-100 overflow-hidden transform transition-all"
+        className="relative z-10 w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-emerald-100 dark:border-slate-800 overflow-hidden transform transition-all animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Bar */}

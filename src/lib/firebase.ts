@@ -10,13 +10,13 @@ import {
   onAuthStateChanged
 } from "firebase/auth";
 import { 
+  initializeFirestore,
   getFirestore, 
   collection, 
   doc, 
   setDoc, 
   getDoc, 
   onSnapshot, 
-  getDocFromServer,
   Firestore
 } from "firebase/firestore";
 import firebaseConfig from "../../firebase-applet-config.json";
@@ -157,7 +157,18 @@ console.log("🔥 [Firebase Init] Initializing Firebase SDK with Project ID:", r
 
 // Initialize Firebase App & Services
 export const app = getApps().length === 0 ? initializeApp(resolvedFirebaseConfig) : getApp();
-export const db = getFirestore(app, databaseId);
+
+export const db: Firestore = (() => {
+  try {
+    return initializeFirestore(app, {
+      experimentalAutoDetectLongPolling: true
+    }, databaseId);
+  } catch (_err) {
+    // If already initialized or custom settings applied
+    return getFirestore(app, databaseId);
+  }
+})();
+
 export const auth = getAuth(app);
 export const isFirebaseConfigured = true;
 
@@ -177,18 +188,6 @@ if (auth) {
       console.warn("⚠️ [Firebase Auth] Persistence setup note:", err?.message || err);
     });
 }
-
-// Test connection on startup
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn("Firebase Firestore is operating in offline/local cache mode.");
-    }
-  }
-}
-testConnection();
 
 // Standard Error Schema for Firestore operations
 export enum OperationType {

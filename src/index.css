@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -9,20 +8,42 @@
   --font-mono: "JetBrains Mono", monospace;
 }
 
-/* Base resets & theme mode defaults */
+/* Base resets & mobile fluid performance */
 :root {
   color-scheme: light;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html, body, #root {
   max-width: 100vw;
   overflow-x: hidden;
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-overflow-scrolling: touch;
 }
 
 body {
   background-color: #f8fafc;
   color: #0f172a;
+  overscroll-behavior-y: contain;
+}
+
+/* Smooth scrolling on scrollable elements */
+.smooth-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+img {
+  content-visibility: auto;
 }
 
 :root.dark {

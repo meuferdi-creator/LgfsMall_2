@@ -184,6 +184,7 @@ export default function AuthModal({
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    clearMessages();
     const ok = await register({
       name: regName.trim(),
       email: regEmail.trim(),
@@ -535,13 +536,17 @@ export default function AuthModal({
 
             <div>
               <PasswordInput
-                label="Mot de passe"
+                label="Mot de passe (6 caractères minimum)"
                 requiredStar
                 required
+                minLength={6}
                 value={regPassword}
                 onChange={(e) => setRegPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="6 caractères ou plus"
               />
+              <p className="text-[10px] text-slate-400 dark:text-emerald-400 mt-1">
+                🔒 Minimum 6 caractères. Conservez-le précieusement.
+              </p>
             </div>
 
             <button

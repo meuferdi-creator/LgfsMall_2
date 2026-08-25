@@ -584,8 +584,13 @@ export default function AdminInvestmentProjects({
 
       {/* FORM MODAL (CREATE / EDIT) */}
       {isFormModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-3xl w-full border border-emerald-100 dark:border-slate-800 shadow-2xl overflow-hidden my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div 
+            className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+            onClick={() => setIsFormModalOpen(false)} 
+            aria-hidden="true" 
+          />
+          <div className="relative z-10 bg-white dark:bg-slate-900 rounded-3xl max-w-3xl w-full border border-emerald-100 dark:border-slate-800 shadow-2xl overflow-hidden my-8 animate-scale-in">
             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900">
               <div className="flex items-center space-x-2">
                 <TrendingUp className="w-5 h-5 text-emerald-600" />
@@ -937,8 +942,13 @@ export default function AdminInvestmentProjects({
 
       {/* DETAIL MODAL VIEW */}
       {isDetailModalOpen && viewingProject && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full border border-emerald-100 dark:border-slate-800 shadow-2xl overflow-hidden my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div 
+            className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+            onClick={() => setIsDetailModalOpen(false)} 
+            aria-hidden="true" 
+          />
+          <div className="relative z-10 bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full border border-emerald-100 dark:border-slate-800 shadow-2xl overflow-hidden my-8 animate-scale-in">
             {/* Header / Cover */}
             <div className="relative h-48 bg-slate-900 overflow-hidden">
               {viewingProject.coverImage ? (
@@ -1054,8 +1064,13 @@ export default function AdminInvestmentProjects({
 
       {/* DELETE CONFIRMATION MODAL */}
       {isDeleteModalOpen && deletingProject && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full border border-rose-100 dark:border-rose-900/30 shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div 
+            className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+            onClick={() => setIsDeleteModalOpen(false)} 
+            aria-hidden="true" 
+          />
+          <div className="relative z-10 bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full border border-rose-100 dark:border-rose-900/30 shadow-2xl p-6 space-y-4 animate-scale-in">
             <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
               <AlertTriangle className="w-6 h-6" />
             </div>

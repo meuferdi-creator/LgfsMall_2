@@ -149,9 +149,15 @@ Bonjour l'équipe support LGF's Mall, j'ai besoin d'assistance pour ce problème
   };
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 overflow-y-auto">
+      {/* Backdrop */}
       <div 
-        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
+        className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+        onClick={onClose} 
+        aria-hidden="true" 
+      />
+      <div 
+        className="relative z-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-8 animate-scale-in"
         role="dialog"
         aria-labelledby="ticket-modal-title"
       >

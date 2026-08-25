@@ -164,6 +164,7 @@ export default function ProductDetailModal({
     loadVendorProfile();
   }, [product.vendorId]);
 
+  const maxAvailableStock = product.stock > 0 ? product.stock : 999;
   const activeVariant = parsedVariants.find((v: any) => v.color === selectedColor);
   const basePrice = activeVariant?.price ? Number(activeVariant.price) : product.price;
 
@@ -173,14 +174,15 @@ export default function ProductDetailModal({
 
   const isWholesaleActive = hasWholesale && qty >= wholesaleMin;
   const activeUnitPrice = isWholesaleActive ? wholesalePrice : basePrice;
-  const totalPrice = activeUnitPrice * qty;
+  const totalPrice = Math.round(activeUnitPrice * qty);
+  const packPrice = Math.round(wholesaleMin * wholesalePrice);
 
   const savingsPercent = hasWholesale
     ? Math.round(((basePrice - wholesalePrice) / basePrice) * 100)
     : 0;
 
   const totalSavings = isWholesaleActive
-    ? (basePrice - wholesalePrice) * qty
+    ? Math.round((basePrice - wholesalePrice) * qty)
     : 0;
 
   const handleShare = () => {
@@ -206,12 +208,19 @@ export default function ProductDetailModal({
 
   return (
     <div 
-      className="fixed inset-0 bg-emerald-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="product-detail-modal-title"
     >
-      <div className="bg-white rounded-3xl max-w-5xl w-full overflow-hidden border border-emerald-100 shadow-2xl flex flex-col my-4 sm:my-8 relative text-emerald-950 animate-scale-in">
+      {/* Crisp dark backdrop overlay */}
+      <div 
+        className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+        onClick={onClose} 
+        aria-hidden="true" 
+      />
+
+      <div className="relative z-10 bg-white dark:bg-slate-900 rounded-3xl max-w-5xl w-full overflow-hidden border border-emerald-100 dark:border-emerald-800 shadow-2xl flex flex-col my-4 sm:my-8 text-emerald-950 dark:text-emerald-50 animate-scale-in">
         
         {/* Top Header Navigation Bar */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 gap-2">
@@ -274,7 +283,7 @@ export default function ProductDetailModal({
                   referrerPolicy="no-referrer"
                   className={`max-w-full max-h-full object-contain bg-white transition-transform duration-300 ${isZoomed ? "scale-150" : "scale-100"}`} 
                 />
-                <span className="absolute bottom-3 right-3 bg-emerald-950/60 backdrop-blur-md text-white text-[9px] px-2.5 py-1 rounded-lg uppercase font-mono font-bold tracking-wider">
+                <span className="absolute bottom-3 right-3 bg-slate-950/80 text-white text-[9px] px-2.5 py-1 rounded-lg uppercase font-mono font-bold tracking-wider shadow-sm">
                   {isZoomed ? "Cliquez pour réduire" : "Cliquez pour zoomer"}
                 </span>
 
@@ -382,55 +391,54 @@ export default function ProductDetailModal({
                           : "text-emerald-950 dark:text-white"
                       }`}
                     >
-                      {formatCurrency(product.price)}
+                      {formatCurrency(basePrice)} / unité
                     </span>
                   </div>
                 </div>
 
-                {/* Prix Gros ou Disponibilité */}
+                {/* Offre de quantité / Prix de gros */}
                 {hasWholesale ? (
                   <div
-                    className={`p-3.5 rounded-xl border transition-all shadow-2xs flex items-center justify-between gap-3 ${
+                    className={`p-3.5 rounded-xl border transition-all shadow-2xs flex flex-col gap-2 ${
                       isWholesaleActive
                         ? "bg-amber-500 text-white border-amber-600 shadow-xs"
                         : "bg-amber-50/95 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800/70 text-amber-900 dark:text-amber-100"
                     }`}
                   >
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span
-                          className={`text-[10px] font-black uppercase font-mono tracking-wider ${
-                            isWholesaleActive ? "text-amber-100" : "text-amber-800 dark:text-amber-300"
+                          className={`text-[10px] font-black uppercase font-mono tracking-wider px-2 py-0.5 rounded ${
+                            isWholesaleActive ? "bg-amber-700 text-white" : "bg-amber-200 text-amber-950 dark:bg-amber-900 dark:text-amber-200"
                           }`}
                         >
-                          Prix de gros
+                          OFFRE
                         </span>
-                        <span
-                          className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded leading-none font-mono ${
-                            isWholesaleActive
-                              ? "bg-amber-700 text-white"
-                              : "bg-amber-100 dark:bg-amber-900/90 text-amber-900 dark:text-amber-200 border border-amber-300/80 dark:border-amber-700/60"
-                          }`}
-                        >
-                          Dès {wholesaleMin} pcs
+                        <span className="text-sm font-black">
+                          {wholesaleMin} pour {formatCurrency(packPrice)}
                         </span>
                       </div>
                       <span
-                        className={`text-[9px] font-bold mt-0.5 ${
+                        className={`text-xs font-bold ${
                           isWholesaleActive ? "text-amber-100" : "text-amber-700 dark:text-amber-400"
                         }`}
                       >
-                        -{savingsPercent}% par article
+                        -{savingsPercent}%
                       </span>
                     </div>
-                    <div className="text-right shrink-0">
-                      <span
-                        className={`font-mono font-black text-base sm:text-lg whitespace-nowrap block ${
-                          isWholesaleActive ? "text-white" : "text-amber-700 dark:text-amber-300"
-                        }`}
-                      >
-                        {formatCurrency(wholesalePrice)}
+                    <div className="flex items-center justify-between text-xs font-semibold border-t border-amber-200/50 dark:border-amber-800/50 pt-1.5">
+                      <span className={isWholesaleActive ? "text-amber-100" : "text-amber-700 dark:text-amber-300"}>
+                        Soit {formatCurrency(Math.round(wholesalePrice))} / unité
                       </span>
+                      {!isWholesaleActive && (
+                        <button
+                          type="button"
+                          onClick={() => setQty(wholesaleMin)}
+                          className="text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1 rounded shadow-2xs cursor-pointer transition-colors"
+                        >
+                          Appliquer l'offre ({wholesaleMin} pcs) →
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -446,10 +454,10 @@ export default function ProductDetailModal({
                     <div className="text-right">
                       <span
                         className={`text-xs sm:text-sm font-black font-mono block ${
-                          product.stock > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+                          product.stock > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-emerald-700 dark:text-emerald-300"
                         }`}
                       >
-                        {product.stock > 0 ? `${product.stock} ${t.inStock}` : t.outOfStock}
+                        {product.stock > 0 ? `${product.stock} ${t.inStock}` : "En stock / Disponible"}
                       </span>
                     </div>
                   </div>
@@ -576,110 +584,103 @@ export default function ProductDetailModal({
             </div>
 
             {/* Interactive simulator controls */}
-            {product.stock > 0 ? (
-              <div className="space-y-3 pt-3 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-emerald-700 uppercase font-mono">Quantité à commander :</span>
-                  <div className="flex items-center space-x-1">
-                    <button
-                      type="button"
-                      onClick={() => setQty(Math.max(1, qty - 1))}
-                      disabled={qty <= 1}
-                      className="w-8 h-8 bg-emerald-50 border border-emerald-100 text-emerald-950 rounded-lg flex items-center justify-center font-bold text-xs hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
-                    >
-                      -
-                    </button>
-                    <input
-                      type="number"
-                      value={qty}
-                      onChange={(e) => setQty(Math.max(1, Math.min(product.stock, parseInt(e.target.value) || 1)))}
-                      min={1}
-                      max={product.stock}
-                      className="w-12 h-8 bg-emerald-50 border border-emerald-100 text-emerald-950 rounded-lg text-center text-xs font-bold"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setQty(Math.min(product.stock, qty + 1))}
-                      disabled={qty >= product.stock}
-                      className="w-8 h-8 bg-emerald-50 border border-emerald-100 text-emerald-950 rounded-lg flex items-center justify-center font-bold text-xs hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
-                    >
-                      +
-                    </button>
-                  </div>
+            <div className="space-y-3 pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-emerald-700 uppercase font-mono">Quantité à commander :</span>
+                <div className="flex items-center space-x-1">
+                  <button
+                    type="button"
+                    onClick={() => setQty(Math.max(1, qty - 1))}
+                    disabled={qty <= 1}
+                    className="w-8 h-8 bg-emerald-50 border border-emerald-100 text-emerald-950 rounded-lg flex items-center justify-center font-bold text-xs hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    value={qty}
+                    onChange={(e) => setQty(Math.max(1, Math.min(maxAvailableStock, parseInt(e.target.value) || 1)))}
+                    min={1}
+                    max={maxAvailableStock}
+                    className="w-12 h-8 bg-emerald-50 border border-emerald-100 text-emerald-950 rounded-lg text-center text-xs font-bold"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setQty(Math.min(maxAvailableStock, qty + 1))}
+                    disabled={qty >= maxAvailableStock}
+                    className="w-8 h-8 bg-emerald-50 border border-emerald-100 text-emerald-950 rounded-lg flex items-center justify-center font-bold text-xs hover:bg-emerald-100 disabled:opacity-50 cursor-pointer"
+                  >
+                    +
+                  </button>
                 </div>
+              </div>
 
-                {/* Bulk Savings warning bar */}
-                {hasWholesale && (
-                  <div className="flex justify-between items-center text-[10px] font-bold bg-slate-50 border border-slate-100 p-3 rounded-xl">
-                    {isWholesaleActive ? (
-                      <span className="text-amber-600">
-                        🔥 Tarif de gros appliqué ! Économie de {formatCurrency(totalSavings)}
-                      </span>
-                    ) : (
-                      <span className="text-emerald-700">
-                        Ajoutez <strong className="text-amber-600 font-bold">{wholesaleMin - qty} pièces</strong> pour débloquer le prix de gros !
-                      </span>
-                    )}
-                    <span className="text-slate-400 font-mono">Min gros: {wholesaleMin} psc</span>
-                  </div>
-                )}
-
-                {/* Total price section & buttons */}
-                <div className="flex justify-between items-end pt-3">
-                  <div>
-                    <span className="text-[8px] font-bold text-emerald-500 uppercase block font-mono">Total du lot :</span>
-                    <span className="font-extrabold text-emerald-950 text-xl leading-none">
-                      {formatCurrency(totalPrice)}
+              {/* Bulk Savings warning bar */}
+              {hasWholesale && (
+                <div className="flex justify-between items-center text-[10px] font-bold bg-slate-50 border border-slate-100 p-3 rounded-xl">
+                  {isWholesaleActive ? (
+                    <span className="text-amber-600">
+                      🔥 Offre de quantité active ! Économie de {formatCurrency(totalSavings)}
                     </span>
-                  </div>
-                  {isWholesaleActive && (
-                    <span className="bg-amber-100 text-amber-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-md border border-amber-200">
-                      Prix de gros appliqué
+                  ) : (
+                    <span className="text-emerald-700">
+                      Ajoutez <strong className="text-amber-600 font-bold">{wholesaleMin - qty} pièces</strong> pour débloquer l'offre ({formatCurrency(Math.round(wholesalePrice))}/u) !
                     </span>
                   )}
+                  <span className="text-slate-400 font-mono">Min offre: {wholesaleMin} pcs</span>
                 </div>
+              )}
 
-                {/* Main Action Buttons */}
-                <div className="space-y-3 pt-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <button
-                      onClick={onClose}
-                      className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer border border-slate-200"
-                    >
-                      <ChevronLeft className="w-4 h-4 text-slate-600" />
-                      <span>← {t.back}</span>
-                    </button>
+              {/* Total price section & buttons */}
+              <div className="flex justify-between items-end pt-3">
+                <div>
+                  <span className="text-[8px] font-bold text-emerald-500 uppercase block font-mono">Total de la commande :</span>
+                  <span className="font-extrabold text-emerald-950 text-xl leading-none">
+                    {formatCurrency(totalPrice)}
+                  </span>
+                </div>
+                {isWholesaleActive && (
+                  <span className="bg-amber-100 text-amber-800 text-[8px] font-extrabold px-2 py-0.5 rounded-md border border-amber-200">
+                    Offre de lot appliquée
+                  </span>
+                )}
+              </div>
 
-                    <button
-                      onClick={() => {
-                        onAddToCart(product, qty, selectedSize, selectedColor);
-                        onClose();
-                      }}
-                      className="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-950 font-bold py-3.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-xs border border-emerald-200"
-                    >
-                      <ShoppingBag className="w-4 h-4 text-emerald-800" />
-                      <span>{t.addToCart}</span>
-                    </button>
-                    
-                    <button
-                      onClick={() => {
-                        onBuyNow(product.id, qty);
-                        onClose();
-                      }}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-md shadow-emerald-600/10"
-                    >
-                      <span>{t.buyNow}</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </div>
+              {/* Main Action Buttons */}
+              <div className="space-y-3 pt-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <button
+                    onClick={onClose}
+                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer border border-slate-200"
+                  >
+                    <ChevronLeft className="w-4 h-4 text-slate-600" />
+                    <span>← {t.back}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      onAddToCart(product, qty, selectedSize, selectedColor);
+                      onClose();
+                    }}
+                    className="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-950 font-bold py-3.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-xs border border-emerald-200"
+                  >
+                    <ShoppingBag className="w-4 h-4 text-emerald-800" />
+                    <span>{t.addToCart}</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      onBuyNow(product.id, qty);
+                      onClose();
+                    }}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-4 rounded-xl text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-md shadow-emerald-600/10"
+                  >
+                    <span>{t.buyNow}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-            ) : (
-              <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-center">
-                <p className="text-xs font-bold text-rose-600">⚠️ Cet article est actuellement en rupture de stock.</p>
-                <p className="text-[10px] text-rose-500 mt-1">Vous pouvez contacter le vendeur via WhatsApp pour connaître la date de réapprovisionnement.</p>
-              </div>
-            )}
+            </div>
 
           </div>
 

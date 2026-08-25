@@ -2095,16 +2095,20 @@ export default function VendorPortal({
       {productToDelete && (
         <div 
           id="delete-product-modal"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in"
-          onClick={() => {
-            if (!isDeletingProduct) {
-              setProductToDelete(null);
-              setDeleteError(null);
-            }
-          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
         >
           <div 
-            className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-150 space-y-6 relative overflow-hidden"
+            className="fixed inset-0 bg-slate-950/80 transition-opacity" 
+            onClick={() => {
+              if (!isDeletingProduct) {
+                setProductToDelete(null);
+                setDeleteError(null);
+              }
+            }} 
+            aria-hidden="true" 
+          />
+          <div 
+            className="relative z-10 bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-150 space-y-6 overflow-hidden animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Top decorative accent */}
